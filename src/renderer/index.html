@@ -1,0 +1,1972 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>zOffice - Quản Lý Công Việc & Văn Bản</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <!-- TOP HEADER -->
+    <header class="top-header">
+      <div class="brand-area">
+        <div class="brand-logo">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+            <polyline points="10 9 9 9 8 9"></polyline>
+          </svg>
+        </div>
+        <h1 class="brand-title">zOffice</h1>
+        <button
+          type="button"
+          class="version-pill-btn"
+          id="btnOpenUpdateModal"
+          title="Quản lý phiên bản & Kiểm tra cập nhật qua GitHub"
+        >
+          <span id="appVersionText">v1.0.0</span>
+          <span id="appUpdateDot" class="update-dot hidden"></span>
+        </button>
+
+        <!-- Chuyển chế độ hiển thị: Công việc / Cổng Web / Chat với AI -->
+        <div class="view-mode-switcher" id="viewModeSwitcher">
+          <button
+            type="button"
+            class="view-mode-btn active"
+            data-view-mode="tasks"
+            title="Hiển thị danh sách công việc & văn bản"
+          >
+            📋 Công việc
+          </button>
+          <button
+            type="button"
+            class="view-mode-btn"
+            data-view-mode="web"
+            title="Mở trang web Hệ thống nhận văn bản đến (iOffice, vOffice, Egov...)"
+          >
+            🌐 Cổng Web
+          </button>
+          <button
+            type="button"
+            class="view-mode-btn"
+            data-view-mode="chat"
+            title="Trợ lý Chatbox AI đa mô hình (Gemini, OpenAI, Claude, Ollama) & hỏi đáp văn bản"
+          >
+            💬 Chat với AI
+          </button>
+          <button
+            type="button"
+            class="view-mode-btn"
+            data-view-mode="dashboard"
+            title="Dashboard tổng hợp tiến độ công việc của tất cả các phòng ban từ Google Sheet"
+          >
+            📊 Dashboard
+          </button>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <!-- Cụm Zalo gọn gàng trên 1 hàng -->
+        <div class="zalo-status-pill" id="zaloStatusPill">
+          <button class="btn-zalo-chip" id="btnOpenZaloModal" title="Kết nối / Quản lý tài khoản Zalo">
+            <span class="status-dot disconnected" id="zaloStatusDot"></span>
+            <img id="zaloHeaderAvatar" class="zalo-header-avatar hidden" src="" alt="Avatar" />
+            <span id="zaloStatusText">Kết nối Zalo</span>
+          </button>
+          <span class="pill-divider hidden" id="zaloContactsDivider"></span>
+          <button class="btn-zalo-contacts-chip hidden" id="btnOpenContactsModal" title="Quản lý & Đồng bộ Danh bạ Zalo">
+            <span>📒 Danh bạ</span>
+            <span class="contact-count-badge" id="zaloContactCountText">0</span>
+          </button>
+        </div>
+
+        <button
+          class="btn btn-success-soft btn-sm"
+          id="btnOpenCompletionMatcher"
+          title="Đọc văn bản phản hồi của chuyên viên, tự động tìm phần Căn cứ văn bản cấp trên để khớp lệnh và đánh dấu hoàn thành nhiệm vụ"
+        >
+          <span>✅ Khớp VB Hoàn Thành</span>
+        </button>
+
+        <button class="btn btn-primary btn-sm" id="btnCreateDoc">
+          <span>＋ Thêm Văn Bản</span>
+        </button>
+
+        <button
+          class="btn btn-icon-setting"
+          id="btnOpenGeminiSettings"
+          title="Cài đặt AI Gemini tự động đọc văn bản"
+        >
+          <span>⚙️</span>
+          <span class="setting-key-dot" id="geminiKeyStatusDot"></span>
+        </button>
+      </div>
+    </header>
+
+    <!-- WORKSPACE BODY (SUPPORTS TASKS ONLY, WEB PORTAL ONLY, OR SPLIT VIEW) -->
+    <div class="workspace-body mode-tasks" id="workspaceBody">
+      <!-- ==================== LEFT PANE: EMBEDDED WEB PORTAL ==================== -->
+      <section class="web-portal-pane hidden" id="webPortalPane">
+        <div class="portal-toolbar">
+          <div class="portal-nav-row">
+            <div class="portal-nav-btns">
+              <button type="button" class="btn btn-secondary btn-xs" id="btnPortalBack" title="Quay lại trang trước">
+                ←
+              </button>
+              <button type="button" class="btn btn-secondary btn-xs" id="btnPortalForward" title="Tiến tới trang sau">
+                →
+              </button>
+              <button type="button" class="btn btn-secondary btn-xs" id="btnPortalReload" title="Tải lại trang">
+                ↻
+              </button>
+            </div>
+
+            <form id="portalUrlForm" class="portal-url-form">
+              <span class="portal-url-icon">🌐</span>
+              <input
+                type="text"
+                id="portalUrlInput"
+                placeholder="Nhập địa chỉ Web hệ thống văn bản đến (VD: https://ioffice.vnpt.vn, https://voffice.viettel.vn)..."
+              />
+              <button type="submit" class="btn btn-secondary btn-xs">Đi tới</button>
+            </form>
+
+            <button
+              type="button"
+              class="btn btn-ghost btn-xs"
+              id="btnSavePortalBookmark"
+              title="Lưu trang web hiện tại vào thanh truy cập nhanh"
+            >
+              ⭐ Lưu cổng
+            </button>
+
+            <button
+              type="button"
+              class="btn btn-secondary btn-xs"
+              id="btnOpenIofficeLoginModal"
+              title="Lưu Tài khoản & Mật khẩu đăng nhập iOffice để tự động điền và đăng nhập"
+            >
+              🔐 <span id="iofficeSavedStatusText">Lưu TK iOffice</span>
+            </button>
+
+            <button
+              type="button"
+              class="btn btn-ghost btn-xs"
+              id="btnFillIofficeLoginNow"
+              title="Tự động điền Tài khoản & Mật khẩu đã lưu và bấm Đăng nhập ngay trên trang iOffice hiện tại"
+            >
+              🔑 Đăng nhập ngay
+            </button>
+
+            <button
+              type="button"
+              class="btn btn-ai btn-sm"
+              id="btnPullWebPageToApp"
+              title="Tự động lưu file văn bản đang mở trên trang web vào nhiệm vụ & dùng AI Gemini đọc điền thông tin"
+            >
+              📥 Kéo Văn Bản Mới Về App
+            </button>
+
+            <button
+              type="button"
+              class="btn btn-complete-action btn-sm"
+              id="btnPullWebCompletionToApp"
+              title="Đọc văn bản phản hồi của chuyên viên đang mở trên trang web, tìm phần Căn cứ văn bản cấp trên, tự động khớp số ký hiệu & đánh dấu Đã xử lý"
+            >
+              ✅ Kéo VB Phản Hồi & Đánh Dấu Hoàn Thành
+            </button>
+          </div>
+
+          <div class="portal-sub-bar">
+            <div class="portal-bookmarks-list" id="portalBookmarksList"></div>
+
+            <div class="portal-capture-controls">
+              <label class="portal-autocapture-toggle" title="Khi bạn bấm tải bất kỳ tệp PDF/Word/Ảnh nào trên trang web, phần mềm sẽ tự động bắt lấy file đó và đọc bằng AI Gemini">
+                <input type="checkbox" id="chkAutoCaptureWebDownloads" checked />
+                <span>⚡ Tự động bắt file tải về trên Web:</span>
+              </label>
+              <select id="portalDownloadTargetSelect" class="portal-target-select" title="Chọn hành động khi bạn bấm tải file đính kèm trên trang Web">
+                <option value="new_task">📥 Đưa vào Tạo Nhiệm Vụ Mới</option>
+                <option value="completion_response">✅ Đưa vào Khớp Lệnh VB Phản Hồi (Hoàn Thành)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+          <div class="portal-webview-wrapper">
+          <webview
+            id="portalWebview"
+            class="portal-webview"
+            partition="persist:webportal"
+            src="https://www.google.com"
+            allowpopups
+          ></webview>
+        </div>
+      </section>
+
+      <!-- ==================== AI CHAT PANE (CHATBOX STYLE) ==================== -->
+      <section class="ai-chat-pane hidden" id="aiChatPane">
+        <!-- Sidebar: Cuộc trò chuyện & Copilot -->
+        <aside class="chatbox-sidebar" id="chatboxSidebar">
+          <div class="chatbox-sidebar-top">
+            <div class="chatbox-brand">
+              <span class="chatbox-brand-badge">Chatbox AI</span>
+              <span class="chatbox-brand-sub">Đa mô hình • Tích hợp Văn bản</span>
+            </div>
+            <button type="button" class="btn btn-ai btn-sm chatbox-new-btn" id="btnNewAiChat">
+              ＋ Cuộc trò chuyện mới
+            </button>
+            <div class="chatbox-search-wrap">
+              <span class="chatbox-search-icon">🔍</span>
+              <input
+                type="text"
+                id="aiChatSearchInput"
+                placeholder="Tìm cuộc trò chuyện..."
+              />
+            </div>
+          </div>
+
+          <div class="chatbox-session-list" id="aiChatSessionList"></div>
+
+          <div class="chatbox-sidebar-footer">
+            <button type="button" class="btn btn-secondary btn-sm chatbox-settings-btn" id="btnOpenAiChatSettings">
+              ⚙️ Cài đặt Model & API
+            </button>
+          </div>
+        </aside>
+
+        <!-- Main Chat Thread -->
+        <div class="chatbox-main">
+          <!-- Top Bar -->
+          <div class="chatbox-header">
+            <div class="chatbox-header-left">
+              <button type="button" class="btn btn-ghost btn-xs" id="btnToggleChatSidebar" title="Ẩn / Hiện thanh cuộc trò chuyện">
+                ☰
+              </button>
+              <input
+                type="text"
+                id="aiChatTitleInput"
+                class="chatbox-title-input"
+                value="Cuộc trò chuyện mới"
+                title="Nhấn để sửa tên cuộc trò chuyện"
+              />
+            </div>
+
+            <div class="chatbox-header-right">
+              <div class="chatbox-model-switcher" title="Chọn Nhà cung cấp & Mô hình AI (Gemini, ChatGPT, Claude, DeepSeek, Ollama)">
+                <select id="aiChatProviderSelect" class="chatbox-header-select">
+                  <option value="gemini">✨ Gemini</option>
+                  <option value="openai">🤖 ChatGPT / OpenAI</option>
+                  <option value="claude">🧠 Claude</option>
+                  <option value="deepseek">🐋 DeepSeek</option>
+                  <option value="ollama">🦙 Ollama (Local)</option>
+                </select>
+                <select
+                  id="aiChatModelSelect"
+                  class="chatbox-model-select"
+                  title="Chọn mô hình AI (bấm 🔄 để tải danh sách model từ API)"
+                ></select>
+                <input
+                  type="text"
+                  id="aiChatModelInput"
+                  class="chatbox-model-input hidden"
+                  list="aiChatModelDatalist"
+                  placeholder="Nhập tên model..."
+                  title="Nhập tên mô hình AI tùy chỉnh"
+                />
+                <datalist id="aiChatModelDatalist"></datalist>
+                <button
+                  type="button"
+                  id="btnRefreshChatModels"
+                  class="chatbox-refresh-model-btn"
+                  title="Tải danh sách model mới nhất từ API của nhà cung cấp đang chọn"
+                >
+                  🔄
+                </button>
+              </div>
+
+              <button
+                type="button"
+                class="btn btn-ghost btn-xs"
+                id="btnOpenAiPromptSettings"
+                title="Cấu hình Vai trò AI / System Prompt (Copilot)"
+              >
+                🎭 Vai trò AI
+              </button>
+
+              <button
+                type="button"
+                class="btn btn-ghost btn-xs"
+                id="btnExportAiChat"
+                title="Xuất nội dung hội thoại ra tệp Markdown (.md)"
+              >
+                📄 Xuất .md
+              </button>
+
+              <button
+                type="button"
+                class="btn btn-ghost btn-xs"
+                id="btnClearAiChat"
+                title="Xóa toàn bộ tin nhắn trong cuộc trò chuyện này"
+              >
+                🧹 Làm mới
+              </button>
+            </div>
+          </div>
+
+          <!-- Ngữ cảnh dữ liệu công việc & Copilot bar -->
+          <div class="chatbox-context-strip">
+            <div class="chatbox-context-group">
+              <span class="chatbox-context-label">📚 Ngữ cảnh App:</span>
+              <select id="aiChatContextModeSelect" class="chatbox-context-select">
+                <option value="active_docs">⏳ Văn bản Đang xử lý & Quá hạn</option>
+                <option value="all_docs">📋 Toàn bộ văn bản trong App</option>
+                <option value="single_doc">📄 Chọn 1 văn bản cụ thể...</option>
+                <option value="none">🚫 Không kèm dữ liệu App (Chat tự do)</option>
+              </select>
+              <select id="aiChatContextDocSelect" class="chatbox-context-doc-select hidden">
+                <option value="">-- Chọn văn bản --</option>
+              </select>
+            </div>
+
+            <div class="chatbox-copilot-group">
+              <span class="chatbox-context-label">🎭 Copilot:</span>
+              <select id="aiChatCopilotSelect" class="chatbox-context-select"></select>
+            </div>
+          </div>
+
+          <!-- Messages Scroll Area -->
+          <div class="chatbox-messages" id="aiChatMessages"></div>
+
+          <!-- Composer Footer -->
+          <div class="chatbox-composer-wrap" id="aiChatComposerWrap">
+            <div id="aiChatQuoteBar" class="chatbox-quote-bar hidden">
+              <div class="chatbox-quote-preview">
+                <span class="chatbox-quote-tag">💬 Trích dẫn:</span>
+                <span id="aiChatQuoteText"></span>
+              </div>
+              <button type="button" class="btn btn-ghost btn-xs" id="btnCancelAiQuote">✕</button>
+            </div>
+
+            <div id="aiChatAttachmentsBar" class="chatbox-attachments-bar hidden"></div>
+
+            <div class="chatbox-composer-box">
+              <textarea
+                id="aiChatInput"
+                rows="2"
+                placeholder="Nhập câu hỏi cho AI... (Enter để gửi, Shift+Enter xuống dòng, có thể kéo thả tệp PDF/Word/Ảnh hoặc Ctrl+V dán ảnh)"
+              ></textarea>
+              <div class="chatbox-composer-actions">
+                <div class="chatbox-composer-left">
+                  <button
+                    type="button"
+                    class="btn btn-secondary btn-xs"
+                    id="btnPickAiChatFiles"
+                    title="Đính kèm PDF, Word (.docx), Ảnh (.png/.jpg), TXT..."
+                  >
+                    📎 Đính kèm tệp
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-ghost btn-xs"
+                    id="btnInsertDocPrompt"
+                    title="Chèn nhanh yêu cầu phân tích / soạn thảo theo văn bản đã chọn"
+                  >
+                    ✨ Gợi ý nhanh
+                  </button>
+                  <span class="chatbox-composer-hint" id="aiChatActiveProviderHint"></span>
+                </div>
+
+                <div class="chatbox-composer-right">
+                  <button
+                    type="button"
+                    class="btn btn-danger-soft btn-sm hidden"
+                    id="btnStopAiChat"
+                  >
+                    ⏹ Dừng trả lời
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-ai btn-sm"
+                    id="btnSendAiChat"
+                  >
+                    ➤ Gửi AI
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== RIGHT PANE: TASKS & DOCUMENTS ==================== -->
+      <section class="tasks-pane" id="tasksPane">
+        <!-- SUMMARY STATS & 3 MAIN TABS -->
+        <section class="tabs-and-stats-bar">
+          <div class="main-tabs" role="tablist">
+            <button class="tab-btn active" data-tab="processing" id="tabBtnProcessing">
+              <span class="tab-icon processing-icon">⏳</span>
+              <div class="tab-text-group">
+                <span class="tab-title">Đang xử lý</span>
+                <span class="tab-desc">Trong hạn xử lý</span>
+              </div>
+              <span class="tab-badge processing-badge" id="badgeProcessing">0</span>
+            </button>
+
+            <button class="tab-btn" data-tab="overdue" id="tabBtnOverdue">
+              <span class="tab-icon overdue-icon">🚨</span>
+              <div class="tab-text-group">
+                <span class="tab-title">Quá hạn</span>
+                <span class="tab-desc">Cần đôn đốc ngay</span>
+              </div>
+              <span class="tab-badge overdue-badge" id="badgeOverdue">0</span>
+            </button>
+
+            <button class="tab-btn" data-tab="completed" id="tabBtnCompleted">
+              <span class="tab-icon completed-icon">✅</span>
+              <div class="tab-text-group">
+                <span class="tab-title">Đã xử lý</span>
+                <span class="tab-desc">Hoàn thành nhiệm vụ</span>
+              </div>
+              <span class="tab-badge completed-badge" id="badgeCompleted">0</span>
+            </button>
+          </div>
+
+          <!-- Filter & Search Controls -->
+          <div class="filter-bar">
+            <div class="search-box">
+              <span class="search-icon">🔍</span>
+              <input
+                type="text"
+                id="searchInput"
+                placeholder="Tìm theo Số/Ký hiệu văn bản, Trích yếu, Cơ quan ban hành..."
+              />
+            </div>
+
+            <select id="filterDepartment" class="filter-select" title="Lọc theo phòng ban chuyên môn">
+              <option value="">🏢 Tất cả phòng ban</option>
+              <option value="Phòng Kinh tế">Phòng Kinh tế</option>
+              <option value="Phòng Văn Hóa">Phòng Văn Hóa</option>
+              <option value="Công an">Công an</option>
+              <option value="Quân sự">Quân sự</option>
+              <option value="Trung tâm dịch vụ tổng hợp">Trung tâm dịch vụ tổng hợp</option>
+              <option value="Trung tâm Phục vụ Hành chính công">Trung tâm Phục vụ Hành chính công</option>
+            </select>
+
+            <select id="filterAssignee" class="filter-select" title="Lọc theo người phụ trách">
+              <option value="">👤 Tất cả người phụ trách</option>
+            </select>
+
+            <select id="filterPriority" class="filter-select" title="Lọc theo mức độ khẩn">
+              <option value="">⚡ Tất cả độ khẩn</option>
+              <option value="urgent">🔥 Hỏa tốc / Thượng khẩn</option>
+              <option value="important">⚠️ Khẩn / Quan trọng</option>
+              <option value="normal">📄 Thường</option>
+            </select>
+
+            <button
+              type="button"
+              class="btn btn-secondary btn-sm"
+              id="btnOpenStorageSettings"
+              title="Cấu hình nơi lưu trữ file văn bản (mỗi văn bản giao việc tạo 1 thư mục theo Số/Ký hiệu)"
+            >
+              📁 Nơi lưu văn bản
+            </button>
+
+            <button
+              type="button"
+              class="btn btn-sheet btn-sm"
+              id="btnSyncAllToGoogleSheet"
+              title="Đẩy toàn bộ công việc lên Google Sheet tổng hợp trung tâm"
+            >
+              ☁️ Đồng bộ Sheet
+            </button>
+
+            <button
+              type="button"
+              class="btn btn-secondary btn-sm"
+              id="btnOpenAppsScriptDashboard"
+              title="Mở Dashboard Apps Script theo dõi tiến độ tất cả phòng ban"
+            >
+              📊 Dashboard Tổng hợp
+            </button>
+
+            <button class="btn btn-danger-soft hidden" id="btnBulkRemindOverdue" title="Gửi tin nhắn Zalo nhắc tất cả văn bản đang quá hạn">
+              💬 Gửi Zalo đôn đốc tất cả quá hạn
+            </button>
+          </div>
+        </section>
+
+        <!-- DOCUMENT LIST CONTENT -->
+        <main class="main-content">
+          <div id="documentsContainer" class="documents-list"></div>
+        </main>
+      </section>
+
+      <!-- ==================== DASHBOARD PANE (GOOGLE SHEET TỔNG HỢP) ==================== -->
+      <section class="dashboard-pane hidden" id="dashboardPane">
+        <div class="dash-shell">
+          <div class="dash-topbar">
+            <div>
+              <h2 class="dash-title">Dashboard Theo Dõi Công Việc Các Phòng Ban (Google Sheet Tổng Hợp)</h2>
+              <div class="dash-subtitle">
+                <span class="dash-live-pill" id="inAppDashStatusText">Chưa tải dữ liệu</span>
+                <span id="inAppDashScopeText">Phạm vi: Tất cả phòng ban</span>
+              </div>
+            </div>
+            <div class="dash-topbar-actions">
+              <button type="button" class="btn btn-secondary btn-sm" id="btnDashExportCsv">
+                📥 Xuất CSV
+              </button>
+              <button type="button" class="btn btn-secondary btn-sm hidden" id="btnDashOpenSheetFile">
+                📄 Mở Google Sheet gốc
+              </button>
+              <button type="button" class="btn btn-secondary btn-sm" id="btnDashOpenBrowser" title="Mở Web App trên trình duyệt (khuyên dùng Edge hoặc Chrome Ẩn danh nếu Chrome có nhiều tài khoản)">
+                ↗ Mở Web ngoài
+              </button>
+              <button type="button" class="btn btn-sheet btn-sm" id="btnDashRefresh">
+                🔄 Làm mới dữ liệu
+              </button>
+            </div>
+          </div>
+
+          <div id="dashNotConfiguredBanner" class="empty-state-box hidden">
+            <div class="empty-state-icon">📊</div>
+            <div class="empty-state-title">Chưa kết nối URL Google Apps Script</div>
+            <p class="empty-state-desc">
+              Vui lòng dán URL Web App (<code>https://script.google.com/macros/s/.../exec</code>) vào phần Cài đặt để xem Dashboard tổng hợp trực tiếp ngay trong phần mềm mà không bị lỗi đa tài khoản trình duyệt.
+            </p>
+            <button type="button" class="btn btn-sheet" id="btnDashGoToSettings">
+              ⚙️ Cấu hình Google Sheet ngay
+            </button>
+          </div>
+
+          <div id="dashMainContent" class="dash-main-content">
+            <!-- Department Filter Bar -->
+            <div class="dash-card">
+              <div class="dash-card-head">
+                <span class="dash-section-label">LỌC THEO PHÒNG BAN / ĐƠN VỊ CHUYÊN MÔN</span>
+                <select id="dashDeptSelect" class="filter-select">
+                  <option value="">🏢 Tất cả phòng ban</option>
+                </select>
+              </div>
+              <div class="dash-dept-pills" id="dashDeptPills"></div>
+            </div>
+
+            <!-- KPI Summary -->
+            <div class="dash-kpi-grid">
+              <div class="dash-kpi-card is-selected" data-dash-kpi="all">
+                <div class="dash-kpi-label">Tổng số công việc</div>
+                <div class="dash-kpi-val" id="dashKpiTotal">0</div>
+                <div class="dash-kpi-sub" id="dashKpiSub">Tất cả phòng ban</div>
+              </div>
+              <div class="dash-kpi-card kpi-proc" data-dash-kpi="processing">
+                <div class="dash-kpi-label">Đang thực hiện</div>
+                <div class="dash-kpi-val" id="dashKpiProcessing">0</div>
+                <div class="dash-kpi-sub">Trong thời hạn</div>
+              </div>
+              <div class="dash-kpi-card kpi-over" data-dash-kpi="overdue">
+                <div class="dash-kpi-label">Quá hạn</div>
+                <div class="dash-kpi-val" id="dashKpiOverdue">0</div>
+                <div class="dash-kpi-sub">Cần đôn đốc ngay</div>
+              </div>
+              <div class="dash-kpi-card kpi-done" data-dash-kpi="completed">
+                <div class="dash-kpi-label">Đã hoàn thành</div>
+                <div class="dash-kpi-val" id="dashKpiCompleted">0</div>
+                <div class="dash-kpi-sub" id="dashKpiRate">Tỷ lệ hoàn thành: 0%</div>
+              </div>
+            </div>
+
+            <!-- Analytics Grid -->
+            <div class="dash-analytics-grid">
+              <div class="dash-card">
+                <div class="dash-card-head">
+                  <h3 class="dash-card-title">Tiến độ theo từng Phòng ban (Bấm để lọc)</h3>
+                  <div class="dash-legend">
+                    <span><i class="swatch seg-done"></i>Xong</span>
+                    <span><i class="swatch seg-proc"></i>Đang làm</span>
+                    <span><i class="swatch seg-over"></i>Quá hạn</span>
+                  </div>
+                </div>
+                <div class="dash-bars-list" id="dashDeptBars"></div>
+              </div>
+
+              <div class="dash-card">
+                <div class="dash-card-head">
+                  <h3 class="dash-card-title">Bảng tổng hợp số liệu các phòng</h3>
+                </div>
+                <div class="dash-table-wrap">
+                  <table class="dash-table">
+                    <thead>
+                      <tr>
+                        <th>Phòng ban</th>
+                        <th>Tổng</th>
+                        <th>Đang làm</th>
+                        <th>Quá hạn</th>
+                        <th>Xong</th>
+                        <th>Tỷ lệ</th>
+                      </tr>
+                    </thead>
+                    <tbody id="dashDeptTableBody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tasks Table -->
+            <div class="dash-card">
+              <div class="dash-filter-bar">
+                <div class="dash-status-tabs">
+                  <button type="button" class="dash-tab active" data-dash-status="all">Tất cả (<span id="dashTabAll">0</span>)</button>
+                  <button type="button" class="dash-tab" data-dash-status="processing">Đang thực hiện (<span id="dashTabProc">0</span>)</button>
+                  <button type="button" class="dash-tab" data-dash-status="overdue">Quá hạn (<span id="dashTabOver">0</span>)</button>
+                  <button type="button" class="dash-tab" data-dash-status="completed">Đã hoàn thành (<span id="dashTabDone">0</span>)</button>
+                </div>
+                <div class="dash-filter-inputs">
+                  <input type="search" id="dashSearchInput" class="input-ctrl-sm" placeholder="Tìm Số/Ký hiệu, Trích yếu, Phụ trách..." />
+                  <select id="dashSpecialistSelect" class="filter-select">
+                    <option value="">Tất cả chuyên viên</option>
+                  </select>
+                  <select id="dashPrioritySelect" class="filter-select">
+                    <option value="">Tất cả độ khẩn</option>
+                    <option value="urgent">Hỏa tốc / Thượng khẩn</option>
+                    <option value="important">Khẩn / Quan trọng</option>
+                    <option value="normal">Thường</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="dash-table-wrap">
+                <table class="dash-table dash-tasks-table">
+                  <thead>
+                    <tr>
+                      <th>Số / Ký hiệu</th>
+                      <th>Phòng ban</th>
+                      <th>Nội dung công việc</th>
+                      <th>Chuyên viên / Phụ trách</th>
+                      <th>Hạn xử lý</th>
+                      <th>Độ khẩn</th>
+                      <th>Trạng thái</th>
+                    </tr>
+                  </thead>
+                  <tbody id="dashTasksTableBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL 1: THÊM / CHỈNH SỬA VĂN BẢN CẦN XỬ LÝ                               -->
+  <!-- ========================================================================= -->
+  <div class="modal-backdrop hidden" id="docModal">
+    <div class="modal-container modal-xl">
+      <div class="modal-header">
+        <h2 id="docModalTitle">Thêm Văn Bản Cần Xử Lý</h2>
+        <button class="modal-close" data-close-modal="docModal">✕</button>
+      </div>
+
+      <form id="docForm" class="modal-body doc-form-grid">
+        <input type="hidden" id="docIdInput" />
+
+        <!-- Cột trái: Thông tin văn bản & Tệp đính kèm -->
+        <div class="form-column">
+          <!-- Khung AI Gemini tự động đọc văn bản -->
+          <div class="ai-autofill-banner">
+            <div class="ai-autofill-top">
+              <div>
+                <div class="ai-autofill-title">✨ Tự động đọc văn bản & điền thông tin bằng AI Gemini</div>
+                <div class="ai-autofill-sub">Hỗ trợ đọc PDF (kể cả bản scan/ký số), Ảnh chụp văn bản, Word (.docx), Text (.txt)</div>
+              </div>
+              <div class="inline-actions">
+                <button type="button" class="btn btn-ai btn-sm" id="btnPickAndAnalyzeWithAI">
+                  ✨ Chọn tệp & Đọc tự động
+                </button>
+                <button type="button" class="btn btn-ghost btn-xs" id="btnConfigGeminiFromForm" title="Cài đặt Gemini API Key">
+                  ⚙️ API Key
+                </button>
+              </div>
+            </div>
+            <div id="aiAnalysisStatusBox" class="ai-analysis-status hidden"></div>
+          </div>
+
+          <div class="section-heading">1. Thông tin văn bản / công việc</div>
+
+          <div class="form-row-2">
+            <div class="form-group">
+              <label for="docNumberInput">Số / Ký hiệu văn bản <span class="req">*</span></label>
+              <input
+                type="text"
+                id="docNumberInput"
+                required
+                placeholder="VD: 148/UBND-VX, 25/CV-VP..."
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="docIssuerInput">Cơ quan ban hành / Nguồn</label>
+              <input
+                type="text"
+                id="docIssuerInput"
+                placeholder="VD: UBND Tỉnh, Sở Nội vụ, Ban Giám đốc..."
+              />
+            </div>
+          </div>
+
+          <div class="form-row-2">
+            <div class="form-group">
+              <label for="docDepartmentInput">Phòng ban chuyên môn phụ trách</label>
+              <select id="docDepartmentInput">
+                <option value="">-- Chọn phòng ban chuyên môn --</option>
+                <option value="Phòng Kinh tế">Phòng Kinh tế</option>
+                <option value="Phòng Văn Hóa">Phòng Văn Hóa</option>
+                <option value="Công an">Công an</option>
+                <option value="Quân sự">Quân sự</option>
+                <option value="Trung tâm dịch vụ tổng hợp">Trung tâm dịch vụ tổng hợp</option>
+                <option value="Trung tâm Phục vụ Hành chính công">Trung tâm Phục vụ Hành chính công</option>
+                <option value="__custom__">➕ Nhập phòng ban / đơn vị khác...</option>
+              </select>
+              <input
+                type="text"
+                id="docDepartmentCustomInput"
+                class="hidden"
+                style="margin-top: 6px;"
+                placeholder="Nhập tên phòng ban / đơn vị khác..."
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="docSpecialistInput">Chuyên viên giao việc / theo dõi</label>
+              <input
+                type="text"
+                id="docSpecialistInput"
+                placeholder="VD: Nguyễn Văn A (Chuyên viên theo dõi)"
+              />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="docTitleInput">Trích yếu nội dung / Tên công việc <span class="req">*</span></label>
+            <textarea
+              id="docTitleInput"
+              rows="2"
+              required
+              placeholder="Nhập trích yếu nội dung văn bản hoặc nhiệm vụ cần xử lý..."
+            ></textarea>
+          </div>
+
+          <div class="form-row-3">
+            <div class="form-group">
+              <label for="docReceivedDateInput">Ngày nhận văn bản</label>
+              <input type="date" id="docReceivedDateInput" />
+            </div>
+
+            <div class="form-group">
+              <label for="docDueDateInput">Hạn xử lý (Deadline) <span class="req">*</span></label>
+              <input type="datetime-local" id="docDueDateInput" required />
+            </div>
+
+            <div class="form-group">
+              <label for="docPriorityInput">Độ khẩn / Ưu tiên</label>
+              <select id="docPriorityInput">
+                <option value="normal">📄 Thường</option>
+                <option value="important">⚠️ Khẩn / Quan trọng</option>
+                <option value="urgent">🔥 Hỏa tốc / Thượng khẩn</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="docNotesInput">Nội dung chỉ đạo / Ghi chú xử lý</label>
+            <textarea
+              id="docNotesInput"
+              rows="3"
+              placeholder="Ghi chú yêu cầu xử lý, nội dung giao việc cụ thể cho người phụ trách..."
+            ></textarea>
+          </div>
+
+          <!-- Đính kèm tệp văn bản (Lưu chung vào 1 thư mục theo Số/Ký hiệu văn bản) -->
+          <div class="section-heading mt-12">
+            <span>2. Tệp văn bản đính kèm (Lưu chung theo Số/Ký hiệu văn bản)</span>
+            <button
+              type="button"
+              class="btn btn-ghost btn-xs"
+              id="btnOpenStorageFromDocForm"
+              title="Cấu hình nơi lưu trữ file văn bản"
+            >
+              📁 Nơi lưu file
+            </button>
+          </div>
+
+          <div class="att-pick-toolbar">
+            <button type="button" class="btn btn-secondary btn-xs btn-pick-cat-superior" data-pick-att-category="superior" title="Thêm văn bản của ngành cấp trên (lưu vào thư mục văn bản giao việc)">
+              ＋ 🏛️ VB Cấp trên
+            </button>
+            <button type="button" class="btn btn-secondary btn-xs btn-pick-cat-assignment" data-pick-att-category="assignment" title="Thêm văn bản giao việc (lưu vào thư mục văn bản giao việc)">
+              ＋ 📋 VB Giao việc
+            </button>
+            <button type="button" class="btn btn-secondary btn-xs btn-pick-cat-completed" data-pick-att-category="completed" title="Thêm văn bản phúc đáp thực hiện của cơ quan chuyên môn (lưu vào cùng thư mục văn bản giao việc)">
+              ＋ ✅ VB Phúc đáp / Thực hiện
+            </button>
+          </div>
+
+          <div id="docFormAttachmentsList" class="attachments-box">
+            <div class="empty-hint">Chưa có tệp văn bản đính kèm. Tất cả văn bản cấp trên, giao việc và phúc đáp sẽ được lưu chung vào 1 thư mục theo Số/Ký hiệu văn bản.</div>
+          </div>
+
+          <!-- Trạng thái xử lý -->
+          <div class="form-row-2 mt-12">
+            <div class="form-group">
+              <label for="docStatusInput">Trạng thái xử lý</label>
+              <select id="docStatusInput">
+                <option value="processing">⏳ Đang xử lý</option>
+                <option value="completed">✅ Đã xử lý (Hoàn thành)</option>
+              </select>
+            </div>
+            <div class="form-group" id="completionNoteGroup">
+              <label for="docCompletionNoteInput">Kết quả xử lý (khi hoàn thành)</label>
+              <input
+                type="text"
+                id="docCompletionNoteInput"
+                placeholder="VD: Đã ban hành báo cáo số 15/BC..."
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- Cột phải: Chọn người phụ trách từ Danh bạ Zalo & Tự động gửi tin nhắn -->
+        <div class="form-column">
+          <div class="section-heading">
+            <span>3. Chọn người phụ trách từ Danh bạ Zalo</span>
+            <div class="inline-actions">
+              <button type="button" class="btn btn-ghost btn-xs" id="btnSyncContactsInForm" title="Tải danh bạ bạn bè từ tài khoản Zalo">
+                🔄 Đồng bộ Zalo
+              </button>
+              <button type="button" class="btn btn-ghost btn-xs" id="btnToggleQuickAddContact">
+                ＋ Thêm liên hệ
+              </button>
+            </div>
+          </div>
+
+          <!-- Khung thêm nhanh liên hệ bằng SĐT hoặc Thủ công -->
+          <div id="quickAddContactBox" class="quick-add-contact-box hidden">
+            <div class="quick-add-tabs">
+              <span class="quick-add-title">Thêm người phụ trách bằng SĐT Zalo hoặc nhập tên:</span>
+            </div>
+            <div class="quick-add-row">
+              <input
+                type="text"
+                id="quickPhoneInput"
+                placeholder="Nhập SĐT Zalo (VD: 0912345678)"
+              />
+              <button type="button" class="btn btn-zalo btn-xs" id="btnFindPhoneInForm">
+                🔍 Tìm Zalo theo SĐT
+              </button>
+            </div>
+            <div class="quick-add-divider">Hoặc thêm trực tiếp vào danh bạ:</div>
+            <div class="quick-add-row">
+              <input
+                type="text"
+                id="quickManualNameInput"
+                placeholder="Họ tên người phụ trách *"
+              />
+              <input
+                type="text"
+                id="quickManualUidInput"
+                placeholder="Zalo UID (nếu có)"
+              />
+              <button type="button" class="btn btn-secondary btn-xs" id="btnAddManualInForm">
+                ＋ Lưu & Chọn
+              </button>
+            </div>
+          </div>
+
+          <!-- Danh sách Người phụ trách đã chọn -->
+          <div class="selected-assignees-wrapper">
+            <label class="sub-label">
+              Người phụ trách đã chọn (<span id="selectedAssigneesCount">0</span>):
+            </label>
+            <div id="selectedAssigneesList" class="selected-assignees-list">
+              <div class="empty-hint">Chưa chọn người phụ trách nào. Hãy tích chọn từ danh bạ bên dưới.</div>
+            </div>
+          </div>
+
+          <!-- Tìm kiếm và danh sách Danh bạ Zalo -->
+          <div class="contact-picker-box" id="contactPickerBox">
+            <div class="contact-search-row">
+              <input
+                type="text"
+                id="assigneeSearchInput"
+                placeholder="🔍 Tìm tên trong danh bạ Zalo, tên gợi nhớ, SĐT..."
+              />
+            </div>
+            <div id="contactPickerList" class="contact-picker-list"></div>
+          </div>
+          <div
+            id="contactPickerLoginNotice"
+            class="empty-hint hidden"
+            style="margin-top: 8px; padding: 14px; border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); text-align: center;"
+          >
+            <div style="margin-bottom: 8px;">🔒 Bạn chưa đăng nhập Zalo nên không hiển thị danh bạ.</div>
+            <button type="button" class="btn btn-zalo btn-xs" id="btnLoginZaloFromDocForm">
+              🔗 Đăng nhập Zalo ngay
+            </button>
+          </div>
+
+          <!-- Tùy chọn tự động gửi Zalo ngay khi lưu -->
+          <div class="auto-zalo-box">
+            <label class="checkbox-row">
+              <input type="checkbox" id="chkAutoSendZalo" checked />
+              <span class="checkbox-title">
+                💬 Tự động gửi tin nhắn Zalo thông báo cho người phụ trách ngay khi lưu
+              </span>
+            </label>
+            <label class="checkbox-row sub-checkbox">
+              <input type="checkbox" id="chkAutoSendAttachments" checked />
+              <span>📎 Đính kèm luôn tệp văn bản trong tin nhắn Zalo</span>
+            </label>
+          </div>
+        </div>
+      </form>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-close-modal="docModal">Hủy bỏ</button>
+        <button type="submit" form="docForm" class="btn btn-primary" id="btnSaveDoc">
+          💾 Lưu Văn Bản
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL 2: SOẠN & GỬI TIN NHẮN ZALO CHO NGƯỜI PHỤ TRÁCH                      -->
+  <!-- ========================================================================= -->
+  <div class="modal-backdrop hidden" id="sendZaloModal">
+    <div class="modal-container modal-lg">
+      <div class="modal-header zalo-modal-header">
+        <div>
+          <h2>💬 Gửi Tin Nhắn Zalo Cho Người Phụ Trách</h2>
+          <p class="modal-subtitle" id="sendZaloDocSubtitle"></p>
+        </div>
+        <button class="modal-close" data-close-modal="sendZaloModal">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Chọn mẫu tin nhắn nhanh -->
+        <div class="form-group">
+          <label>Chọn mẫu tin nhắn nhanh (Tự động điền thông tin văn bản):</label>
+          <div class="template-pills">
+            <button type="button" class="template-pill active" data-template="assign">
+              📄 Giao văn bản mới
+            </button>
+            <button type="button" class="template-pill" data-template="remind">
+              ⏰ Nhắc sắp đến hạn
+            </button>
+            <button type="button" class="template-pill" data-template="overdue">
+              🚨 Đôn đốc QUÁ HẠN
+            </button>
+            <button type="button" class="template-pill" data-template="completed">
+              ✅ Xác nhận đã xử lý
+            </button>
+          </div>
+        </div>
+
+        <!-- Danh sách người nhận -->
+        <div class="form-group">
+          <div class="label-with-action">
+            <label>Người phụ trách nhận tin nhắn Zalo:</label>
+            <span class="hint-text">Biến <code>{assigneeName}</code> sẽ tự thay bằng tên từng người nhận</span>
+          </div>
+          <div id="sendZaloRecipientsList" class="recipients-check-list"></div>
+        </div>
+
+        <!-- Nội dung tin nhắn & Độ khẩn Zalo -->
+        <div class="form-group">
+          <div class="label-with-action">
+            <label for="sendZaloMessageInput">Nội dung tin nhắn gửi qua Zalo:</label>
+            <div class="urgency-selector">
+              <span>Nhãn ưu tiên Zalo:</span>
+              <select id="sendZaloUrgencySelect">
+                <option value="default">Bình thường</option>
+                <option value="important">⚠️ Quan trọng (Important)</option>
+                <option value="urgent">🚨 Khẩn cấp (Urgent)</option>
+              </select>
+            </div>
+          </div>
+          <textarea
+            id="sendZaloMessageInput"
+            rows="7"
+            placeholder="Nhập nội dung tin nhắn gửi cho người phụ trách..."
+          ></textarea>
+        </div>
+
+        <!-- Đính kèm tệp văn bản -->
+        <div class="form-group">
+          <div class="label-with-action">
+            <label>Gửi kèm tệp văn bản đính kèm qua Zalo:</label>
+            <button type="button" class="btn btn-secondary btn-xs" id="btnAddExtraAttachmentForZalo">
+              📎 + Chọn thêm tệp khác
+            </button>
+          </div>
+          <div id="sendZaloAttachmentsList" class="send-attachments-list"></div>
+        </div>
+
+        <!-- Trạng thái kết quả gửi -->
+        <div id="sendZaloResultBanner" class="send-result-banner hidden"></div>
+
+        <!-- Lịch sử đã gửi của văn bản này -->
+        <div id="sendZaloHistorySection" class="send-history-section hidden">
+          <div class="section-heading">Lịch sử đã gửi Zalo của văn bản này</div>
+          <div id="sendZaloHistoryList" class="send-history-list"></div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-close-modal="sendZaloModal">Đóng</button>
+        <button type="button" class="btn btn-zalo btn-lg" id="btnConfirmSendZalo">
+          🚀 Gửi Tin Nhắn Zalo Ngay
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL 3: ĐĂNG NHẬP & KẾT NỐI ZALO (zca-js)                                -->
+  <!-- ========================================================================= -->
+  <div class="modal-backdrop hidden" id="zaloAuthModal">
+    <div class="modal-container modal-md">
+      <div class="modal-header zalo-modal-header">
+        <h2>🔗 Kết Nối Tài Khoản Zalo (zca-js)</h2>
+        <button class="modal-close" data-close-modal="zaloAuthModal">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Hiển thị khi đã đăng nhập -->
+        <div id="zaloConnectedPanel" class="zalo-connected-panel hidden">
+          <div class="connected-profile-card">
+            <img id="connectedProfileAvatar" class="connected-avatar" src="" alt="Avatar" />
+            <div class="connected-details">
+              <div class="connected-badge">● Đang kết nối Zalo (Đã lưu phiên tự động)</div>
+              <h3 id="connectedProfileName">Tài khoản Zalo</h3>
+              <p id="connectedProfileUid" class="text-muted"></p>
+            </div>
+          </div>
+          <div class="zalo-saved-session-box mt-12">
+            <span>💾 Thông tin đăng nhập Zalo (IMEI, Cookie & Phiên) đã được lưu trên máy. Phần mềm sẽ tự động kết nối khi khởi động.</span>
+          </div>
+          <div class="connected-actions mt-12">
+            <button type="button" class="btn btn-zalo" id="btnSyncContactsFromAuth">
+              🔄 Đồng bộ Danh bạ Bạn bè Zalo
+            </button>
+            <button type="button" class="btn btn-secondary" id="btnShowCurrentZaloCreds">
+              🔑 Xem / Lưu IMEI & Cookie
+            </button>
+            <button type="button" class="btn btn-danger-outline" id="btnLogoutZalo">
+              Đăng xuất & Xóa phiên
+            </button>
+          </div>
+        </div>
+
+        <!-- Hiển thị khi chưa đăng nhập -->
+        <div id="zaloLoginPanel">
+          <!-- Khung kết nối nhanh từ thông tin đã lưu trên máy -->
+          <div id="zaloSavedSessionBanner" class="zalo-saved-session-banner hidden">
+            <div class="zalo-saved-session-info">
+              <strong>💾 Đã có thông tin đăng nhập Zalo lưu trên máy:</strong>
+              <span id="zaloSavedSessionAccountLabel">Tài khoản Zalo đã lưu</span>
+            </div>
+            <div class="inline-actions">
+              <button type="button" class="btn btn-zalo btn-xs" id="btnReconnectSavedZalo">
+                ⚡ Kết nối lại ngay
+              </button>
+              <button type="button" class="btn btn-secondary btn-xs" id="btnViewSavedZaloCreds">
+                🔑 Xem / Sửa Cookie
+              </button>
+            </div>
+          </div>
+
+          <div class="auth-method-tabs">
+            <button type="button" class="auth-tab-btn active" data-auth-tab="qr">
+              📱 Quét Mã QR Zalo (Tự động lưu phiên)
+            </button>
+            <button type="button" class="auth-tab-btn" data-auth-tab="cookie">
+              🔑 Lưu / Đăng nhập bằng Cookie & IMEI
+            </button>
+          </div>
+
+          <!-- Tab Quét mã QR -->
+          <div id="authTabQR" class="auth-tab-content">
+            <div class="qr-box-container">
+              <div id="qrImageWrapper" class="qr-image-wrapper">
+                <div class="qr-placeholder" id="qrPlaceholder">
+                  <p>Bấm nút bên dưới để lấy mã QR đăng nhập Zalo</p>
+                  <button type="button" class="btn btn-zalo" id="btnGenerateQR">
+                    📲 Tạo Mã QR Đăng Nhập
+                  </button>
+                </div>
+                <img id="qrCodeImage" class="qr-code-image hidden" src="" alt="Zalo QR Code" />
+              </div>
+
+              <div id="qrScannedInfo" class="qr-scanned-info hidden">
+                <img id="qrScannedAvatar" src="" alt="Scanned Avatar" />
+                <div>
+                  <strong id="qrScannedName"></strong>
+                  <p>Đã quét mã QR! Vui lòng bấm <b>"Đăng nhập"</b> trên điện thoại của bạn...</p>
+                </div>
+              </div>
+
+              <p class="qr-status-message" id="qrStatusMessage">
+                Mở ứng dụng Zalo trên điện thoại ➔ Quét mã QR. Sau khi quét, thông tin đăng nhập sẽ tự động lưu lại trên máy.
+              </p>
+
+              <button type="button" class="btn btn-secondary btn-sm hidden" id="btnRefreshQR">
+                🔄 Tạo lại mã QR mới
+              </button>
+            </div>
+          </div>
+
+          <!-- Tab Cookie / Credentials -->
+          <div id="authTabCookie" class="auth-tab-content hidden">
+            <form id="cookieLoginForm">
+              <div class="form-group">
+                <label for="credImeiInput">IMEI thiết bị Zalo Web <span class="req">*</span></label>
+                <input
+                  type="text"
+                  id="credImeiInput"
+                  placeholder="VD: f4b1c2d3-e4f5-4678-9abc-def012345678..."
+                  required
+                />
+              </div>
+              <div class="form-group">
+                <label for="credUserAgentInput">User-Agent trình duyệt <span class="req">*</span></label>
+                <input
+                  type="text"
+                  id="credUserAgentInput"
+                  value="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0"
+                  required
+                />
+              </div>
+              <div class="form-group">
+                <label for="credCookieInput">Cookie JSON (Mảng cookies, J2Team JSON hoặc chuỗi Cookie) <span class="req">*</span></label>
+                <textarea
+                  id="credCookieInput"
+                  rows="5"
+                  placeholder='[{"domain":".zalo.me","name":"zpw_sek","value":"..."}]'
+                  required
+                ></textarea>
+              </div>
+              <div class="inline-actions" style="display:flex; gap:8px;">
+                <button type="submit" class="btn btn-zalo" style="flex:1;" id="btnSubmitCookieLogin">
+                  🔐 Lưu & Đăng Nhập Zalo Ngay
+                </button>
+                <button type="button" class="btn btn-secondary" id="btnSaveCookieOnly">
+                  💾 Chỉ Lưu Vào Máy
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <div class="zalo-safety-note">
+            <strong>💡 Lưu thông tin đăng nhập Zalo:</strong> Khi bạn quét mã QR hoặc nhập Cookie/IMEI, phần mềm sẽ lưu toàn bộ thông tin vào <code>data/zalo-session.json</code> và tự động gia hạn phiên để tự động đăng nhập mỗi khi mở máy.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL 4: QUẢN LÝ DANH BẠ ZALO                                             -->
+  <!-- ========================================================================= -->
+  <div class="modal-backdrop hidden" id="contactsModal">
+    <div class="modal-container modal-lg">
+      <div class="modal-header">
+        <div>
+          <h2>📒 Danh Bạ Người Phụ Trách (Zalo)</h2>
+          <p class="modal-subtitle">Đồng bộ từ danh sách bạn bè Zalo hoặc tìm kiếm theo số điện thoại</p>
+        </div>
+        <button class="modal-close" data-close-modal="contactsModal">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="contacts-toolbar">
+          <input
+            type="text"
+            id="contactsModalSearch"
+            placeholder="🔍 Tìm kiếm theo tên, tên gợi nhớ, số điện thoại..."
+          />
+          <div class="contacts-FindPhone-group">
+            <input
+              type="text"
+              id="contactsModalPhoneInput"
+              placeholder="Nhập SĐT tìm Zalo..."
+            />
+            <button type="button" class="btn btn-secondary btn-sm" id="btnModalFindByPhone">
+              🔍 Tìm SĐT
+            </button>
+          </div>
+          <button type="button" class="btn btn-zalo btn-sm" id="btnModalSyncContacts">
+            🔄 Đồng bộ bạn bè Zalo
+          </button>
+        </div>
+
+        <div id="contactsModalList" class="contacts-modal-grid"></div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-close-modal="contactsModal">Đóng</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL 5: CÀI ĐẶT HỆ THỐNG (TÀI KHOẢN iOFFICE & GEMINI AI)                  -->
+  <!-- ========================================================================= -->
+  <div class="modal-backdrop hidden" id="geminiSettingsModal">
+    <div class="modal-container modal-lg">
+      <div class="modal-header ai-modal-header">
+        <div>
+          <h2>⚙️ Cài Đặt Hệ Thống (Lưu File, iOffice & AI Gemini)</h2>
+          <p class="modal-subtitle">Cấu hình nơi lưu trữ văn bản, tài khoản đăng nhập iOffice & AI đọc văn bản</p>
+        </div>
+        <button class="modal-close" data-close-modal="geminiSettingsModal">✕</button>
+      </div>
+
+      <form id="geminiSettingsForm" class="modal-body">
+        <!-- PHẦN 1: LƯU THÔNG TIN ĐĂNG NHẬP iOFFICE / CỔNG VĂN BẢN -->
+        <div class="completion-details-card" id="iofficeSettingsSection">
+          <div class="section-heading">
+            <span>🔐 1. Lưu Thông Tin Đăng Nhập iOffice / Cổng Văn Bản Web</span>
+            <button type="button" class="btn btn-zalo btn-xs" id="btnSaveAndLoginIofficeNow">
+              🔑 Lưu & Đăng Nhập iOffice Ngay
+            </button>
+          </div>
+
+          <div class="form-group mt-12">
+            <label for="iofficeUrlInput">Địa chỉ Cổng Văn Bản / iOffice mặc định:</label>
+            <input
+              type="text"
+              id="iofficeUrlInput"
+              placeholder="VD: https://vpdt.angiang.gov.vn hoặc https://ioffice.vnpt.vn"
+            />
+          </div>
+
+          <div class="form-row-2 mt-12">
+            <div class="form-group">
+              <label for="iofficeUsernameInput">Tài khoản / Tên đăng nhập iOffice:</label>
+              <input
+                type="text"
+                id="iofficeUsernameInput"
+                placeholder="Nhập tên đăng nhập iOffice..."
+                autocomplete="off"
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="iofficePasswordInput">Mật khẩu iOffice:</label>
+              <div style="display:flex; gap:6px;">
+                <input
+                  type="password"
+                  id="iofficePasswordInput"
+                  placeholder="Nhập mật khẩu đăng nhập iOffice..."
+                  autocomplete="off"
+                  style="flex:1;"
+                />
+                <button
+                  type="button"
+                  class="btn btn-secondary btn-xs"
+                  id="btnToggleIofficePass"
+                  title="Hiện / Ẩn mật khẩu iOffice"
+                >
+                  👁️ Hiện
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="auto-zalo-box mt-12">
+            <label class="checkbox-row">
+              <input type="checkbox" id="chkIofficeAutoLogin" checked />
+              <span class="checkbox-title">
+                ⚡ Tự động điền Tài khoản / Mật khẩu và tự động bấm Đăng nhập khi mở trang iOffice
+              </span>
+            </label>
+            <label class="checkbox-row sub-checkbox">
+              <input type="checkbox" id="chkIofficeAutoSaveOnWeb" checked />
+              <span>
+                💾 Tự động bắt và lưu Tài khoản / Mật khẩu khi bạn gõ đăng nhập trực tiếp trên trang Web iOffice
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <!-- PHẦN 2: CẤU HÌNH GEMINI AI -->
+        <div class="completion-details-card mt-12">
+          <div class="section-heading">✨ 2. Cấu Hình Gemini AI Tự Động Đọc Văn Bản</div>
+
+          <div class="form-group mt-12">
+            <label for="geminiApiKeyInput">Gemini API Key</label>
+            <input
+              type="password"
+              id="geminiApiKeyInput"
+              placeholder="Nhập mã API Key từ Google AI Studio (AIzaSy...)"
+            />
+            <span class="hint-text">
+              Lấy mã miễn phí tại <code>https://aistudio.google.com/apikey</code>. API Key được lưu cục bộ an toàn trên máy của bạn.
+            </span>
+          </div>
+
+          <div class="form-group mt-12">
+            <label for="geminiModelSelect">Mô hình Gemini AI sử dụng</label>
+            <div class="storage-dir-row">
+              <select id="geminiModelSelect">
+                <option value="gemini-2.5-flash">⚡ gemini-2.5-flash (Khuyên dùng - Nhanh & Đọc PDF/OCR rất chuẩn)</option>
+                <option value="gemini-2.5-pro">🧠 gemini-2.5-pro (Chuyên sâu cho văn bản dài & phức tạp)</option>
+                <option value="gemini-2.0-flash">🚀 gemini-2.0-flash (Tốc độ phản hồi cực nhanh)</option>
+              </select>
+              <button type="button" class="btn btn-secondary btn-xs" id="btnFetchGeminiModelsMain" title="Tải danh sách model mới nhất từ Gemini API">
+                🔄 Tải DS Model
+              </button>
+            </div>
+          </div>
+
+          <div class="auto-zalo-box mt-12">
+            <label class="checkbox-row">
+              <input type="checkbox" id="chkAutoAnalyzeOnPick" checked />
+              <span class="checkbox-title">
+                ✨ Tự động dùng AI Gemini đọc và điền thông tin ngay khi chọn tệp đính kèm
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <!-- PHẦN 3: CẤU HÌNH NƠI LƯU TRỮ FILE VĂN BẢN -->
+        <div class="completion-details-card mt-12" id="storageSettingsSection">
+          <div class="section-heading">
+            <span>📁 3. Cấu Hình Nơi Lưu Trữ Văn Bản</span>
+            <div class="inline-actions">
+              <button type="button" class="btn btn-ghost btn-xs" id="btnResetStorageDefaults" title="Đặt lại về thư mục mặc định trong data/LuuTru_VanBan">
+                🔄 Mặc định
+              </button>
+              <button type="button" class="btn btn-secondary btn-xs" id="btnMigrateStorageFiles" title="Gom và sắp xếp lại các file văn bản cũ vào thư mục theo Số/Ký hiệu tại nơi lưu trữ đã chọn">
+                📦 Sắp xếp lại file cũ
+              </button>
+            </div>
+          </div>
+
+          <div class="form-group mt-12">
+            <label for="storageRootDirInput">📂 Nơi lưu trữ văn bản (Thư mục gốc):</label>
+            <div class="storage-dir-row">
+              <input type="text" id="storageRootDirInput" placeholder="Đường dẫn thư mục lưu trữ văn bản..." />
+              <button type="button" class="btn btn-secondary btn-xs" id="btnPickStorageRootDir">📂 Chọn nơi lưu</button>
+              <button type="button" class="btn btn-ghost btn-xs" id="btnOpenStorageRootDir" title="Mở thư mục trong Windows Explorer">↗ Mở</button>
+            </div>
+            <span class="hint-text">
+              Mỗi văn bản giao việc sẽ tạo 1 thư mục con đặt tên theo <b>Số/Ký hiệu văn bản giao việc</b> tại đây. Các văn bản của cấp trên, văn bản giao việc và văn bản phúc đáp thực hiện của cơ quan chuyên môn sẽ được lưu chung vào cùng thư mục đó.
+            </span>
+          </div>
+        </div>
+
+        <!-- PHẦN 4: CHUYÊN VIÊN & ĐỒNG BỘ GOOGLE SHEET TỔNG HỢP -->
+        <div class="completion-details-card mt-12" id="googleSheetSettingsSection">
+          <div class="section-heading">
+            <span>📊 4. Chuyên Viên & Đồng Bộ Google Sheet Tổng Hợp (Apps Script)</span>
+            <div class="inline-actions">
+              <button type="button" class="btn btn-secondary btn-xs" id="btnOpenAppsScriptModal" title="Xem & sao chép mã Code.gs và Dashboard.html để cài đặt trên Google Sheet">
+                📜 Lấy mã Apps Script
+              </button>
+              <button type="button" class="btn btn-sheet btn-xs" id="btnOpenDashboardFromSettings" title="Mở Dashboard Apps Script trên trình duyệt">
+                🌐 Mở Dashboard
+              </button>
+            </div>
+          </div>
+
+          <div class="form-row-2 mt-12">
+            <div class="form-group">
+              <label for="specialistNameInput">Tên chuyên viên sử dụng máy này:</label>
+              <input
+                type="text"
+                id="specialistNameInput"
+                placeholder="VD: Trần Thị B (Chuyên viên Văn phòng)"
+              />
+            </div>
+            <div class="form-group">
+              <label for="defaultDepartmentSelect">Phòng ban mặc định khi tạo việc mới:</label>
+              <select id="defaultDepartmentSelect">
+                <option value="">-- Không cố định (chọn từng văn bản) --</option>
+                <option value="Phòng Kinh tế">Phòng Kinh tế</option>
+                <option value="Phòng Văn Hóa">Phòng Văn Hóa</option>
+                <option value="Công an">Công an</option>
+                <option value="Quân sự">Quân sự</option>
+                <option value="Trung tâm dịch vụ tổng hợp">Trung tâm dịch vụ tổng hợp</option>
+                <option value="Trung tâm Phục vụ Hành chính công">Trung tâm Phục vụ Hành chính công</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group mt-12">
+            <label for="googleSheetWebhookUrlInput">URL Web App Google Apps Script (dùng chung cho tất cả chuyên viên):</label>
+            <div class="storage-dir-row">
+              <input
+                type="text"
+                id="googleSheetWebhookUrlInput"
+                placeholder="https://script.google.com/macros/s/.../exec"
+              />
+              <button type="button" class="btn btn-secondary btn-xs" id="btnTestGoogleSheet">
+                🧪 Kiểm tra kết nối
+              </button>
+              <button type="button" class="btn btn-sheet btn-xs" id="btnSyncAllFromSettings">
+                ☁️ Đồng bộ ngay
+              </button>
+            </div>
+          </div>
+
+          <div class="form-group mt-12">
+            <label for="googleSheetSecretInput">Mã bảo mật đồng bộ (Secret Token - tùy chọn):</label>
+            <input
+              type="password"
+              id="googleSheetSecretInput"
+              placeholder="Để trống nếu Apps Script không đặt SYNC_SECRET"
+              autocomplete="off"
+            />
+          </div>
+
+          <div class="auto-zalo-box mt-12">
+            <label class="checkbox-row">
+              <input type="checkbox" id="chkAutoSyncGoogleSheet" checked />
+              <span class="checkbox-title">
+                ☁️ Tự động gửi dữ liệu lên Google Sheet tổng hợp ngay khi chuyên viên giao việc hoặc cập nhật hoàn thành
+              </span>
+            </label>
+          </div>
+          <div id="googleSheetTestStatus" class="ai-analysis-status hidden mt-12"></div>
+        </div>
+      </form>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-close-modal="geminiSettingsModal">Đóng</button>
+        <button type="submit" form="geminiSettingsForm" class="btn btn-ai" id="btnSaveGeminiSettings">
+          💾 Lưu Tất Cả Cấu Hình
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL 6: KHỚP LỆNH VĂN BẢN PHẢN HỒI CỦA CHUYÊN VIÊN & ĐÁNH DẤU HOÀN THÀNH -->
+  <!-- ========================================================================= -->
+  <div class="modal-backdrop hidden" id="completionMatchModal">
+    <div class="modal-container modal-lg">
+      <div class="modal-header completion-modal-header">
+        <div>
+          <h2>✅ Khớp Lệnh Văn Bản Phản Hồi & Đánh Dấu Hoàn Thành Nhiệm Vụ</h2>
+          <p class="modal-subtitle">
+            AI Gemini tự động đọc phần "Căn cứ / Thực hiện..." trong văn bản của chuyên viên, đối chiếu Số/Ký hiệu văn bản cấp trên để đánh dấu Đã xử lý & lưu tệp phản hồi vào nhiệm vụ
+          </p>
+        </div>
+        <button class="modal-close" data-close-modal="completionMatchModal">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Nguồn lấy văn bản phản hồi -->
+        <div class="completion-source-bar">
+          <div class="completion-source-btns">
+            <button type="button" class="btn btn-ai btn-sm" id="btnPickCompletionFile">
+              📎 Chọn tệp VB Phản hồi từ máy tính (PDF, Word, Ảnh)
+            </button>
+            <button type="button" class="btn btn-complete-action btn-sm" id="btnPullCompletionFromWebInModal">
+              🌐 Kéo VB Phản hồi đang mở trên Web
+            </button>
+          </div>
+
+          <label class="checkbox-row" style="font-size:12.5px; font-weight:600; color:#15803d;">
+            <input type="checkbox" id="chkAutoCompleteOnExactMatch" checked />
+            <span>⚡ Tự động khớp lệnh & đánh dấu Đã xử lý ngay khi trùng Số/Ký hiệu cấp trên</span>
+          </label>
+        </div>
+
+        <!-- Trạng thái phân tích AI & Kết quả khớp lệnh -->
+        <div id="completionAnalysisStatusBox" class="ai-analysis-status mt-12">
+          💡 Hãy bấm <b>"Chọn tệp VB Phản hồi từ máy tính"</b> hoặc <b>"Kéo VB Phản hồi đang mở trên Web"</b> để AI Gemini đọc phần căn cứ và tự động khớp lệnh với nhiệm vụ cấp trên.
+        </div>
+
+        <!-- Thông tin bóc tách từ văn bản phản hồi của chuyên viên -->
+        <div class="completion-details-card mt-12">
+          <div class="section-heading">1. Thông tin văn bản phản hồi của chuyên viên</div>
+
+          <div class="form-row-2 mt-12">
+            <div class="form-group">
+              <label>Số / Ký hiệu văn bản phản hồi:</label>
+              <input type="text" id="compResponseDocNumInput" placeholder="VD: 45/BC-TCKT, 112/CV-VP..." />
+            </div>
+            <div class="form-group">
+              <label>Trích yếu văn bản phản hồi:</label>
+              <input type="text" id="compResponseTitleInput" placeholder="Trích yếu báo cáo / công văn trả lời của chuyên viên..." />
+            </div>
+          </div>
+
+          <div class="form-group mt-12">
+            <label>Phần "Căn cứ / Thực hiện văn bản cấp trên" phát hiện trong văn bản chuyên viên:</label>
+            <div id="compReferencedBadges" class="comp-ref-badges">
+              <span class="hint-text">Chưa có dữ liệu căn cứ.</span>
+            </div>
+            <div id="compBasisExcerptBox" class="comp-basis-excerpt hidden"></div>
+          </div>
+
+          <div class="form-group mt-12">
+            <div class="label-with-action">
+              <label>Tệp văn bản phản hồi sẽ lưu đính kèm vào nhiệm vụ:</label>
+              <button type="button" class="btn btn-secondary btn-xs" id="btnAddMoreCompletionFiles">
+                📎 + Thêm tệp phản hồi
+              </button>
+            </div>
+            <div id="compAttachmentsList" class="attachments-box">
+              <div class="empty-hint">Chưa có tệp văn bản phản hồi đính kèm.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chọn / Xác nhận nhiệm vụ cấp trên khớp lệnh -->
+        <div class="completion-details-card mt-12">
+          <div class="section-heading">2. Đối chiếu với Nhiệm vụ (Văn bản cấp trên) trong phần mềm</div>
+
+          <div class="form-group mt-12">
+            <label for="compMatchedTaskSelect">Nhiệm vụ cấp trên được khớp lệnh <span class="req">*</span></label>
+            <select id="compMatchedTaskSelect" class="comp-task-select">
+              <option value="">-- Chọn nhiệm vụ cần đánh dấu Đã xử lý --</option>
+            </select>
+          </div>
+
+          <div class="form-group mt-12">
+            <label for="compCompletionNoteInput">Nội dung ghi nhận kết quả hoàn thành (lưu vào nhiệm vụ):</label>
+            <textarea
+              id="compCompletionNoteInput"
+              rows="3"
+              placeholder="VD: Đã hoàn thành bằng văn bản phản hồi số 45/BC-TCKT (Căn cứ Công văn số 148/UBND-VX)..."
+            ></textarea>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-close-modal="completionMatchModal">Đóng</button>
+        <button type="button" class="btn btn-complete-action btn-lg" id="btnConfirmCompletionMatch">
+          ✅ Xác Nhận Khớp Lệnh & Đánh Dấu Đã Xử Lý
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL 7: CÀI ĐẶT CHATBOX AI (ĐA MÔ HÌNH: GEMINI, OPENAI, CLAUDE, OLLAMA)   -->
+  <!-- ========================================================================= -->
+  <div class="modal-backdrop hidden" id="aiChatSettingsModal">
+    <div class="modal-container modal-lg">
+      <div class="modal-header ai-modal-header">
+        <div>
+          <h2>⚙️ Cài Đặt Chatbox AI Đa Mô Hình</h2>
+          <p class="modal-subtitle">
+            Hỗ trợ Google Gemini, ChatGPT (OpenAI), Anthropic Claude, DeepSeek và Ollama Local — kèm tải danh sách model trực tiếp từ API
+          </p>
+        </div>
+        <button class="modal-close" data-close-modal="aiChatSettingsModal">✕</button>
+      </div>
+
+      <form id="aiChatSettingsForm" class="modal-body">
+        <div class="form-row-2">
+          <div class="form-group">
+            <label for="aiCfgDefaultProvider">Nhà cung cấp AI mặc định</label>
+            <select id="aiCfgDefaultProvider">
+              <option value="gemini">✨ Google Gemini (Khuyên dùng)</option>
+              <option value="openai">🤖 ChatGPT / OpenAI</option>
+              <option value="claude">🧠 Anthropic Claude</option>
+              <option value="deepseek">🐋 DeepSeek</option>
+              <option value="ollama">🦙 Ollama (Chạy offline trên máy)</option>
+            </select>
+          </div>
+          <div class="form-row-2">
+            <div class="form-group">
+              <label for="aiCfgTemperature">Độ sáng tạo (Temperature: <span id="aiCfgTempVal">0.7</span>)</label>
+              <input type="range" id="aiCfgTemperature" min="0" max="1.5" step="0.1" value="0.7" />
+            </div>
+            <div class="form-group">
+              <label for="aiCfgMaxHistory">Số tin nhắn nhớ ngữ cảnh</label>
+              <input type="number" id="aiCfgMaxHistory" min="2" max="40" value="14" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Provider 1: Google Gemini -->
+        <div class="completion-details-card mt-12">
+          <div class="section-heading">
+            <span>✨ 1. Google Gemini (Đồng bộ với Cài đặt AI đọc văn bản)</span>
+            <button type="button" class="btn btn-secondary btn-xs btn-fetch-provider-models" data-fetch-provider="gemini">
+              🔄 Tải DS Model Gemini
+            </button>
+          </div>
+          <div class="form-row-2 mt-12">
+            <div class="form-group">
+              <label for="aiCfgGeminiKey">Gemini API Key</label>
+              <input type="password" id="aiCfgGeminiKey" placeholder="AIzaSy..." autocomplete="off" />
+            </div>
+            <div class="form-group">
+              <label for="aiCfgModelSelect_gemini">Model mặc định</label>
+              <select id="aiCfgModelSelect_gemini" class="ai-cfg-model-select" data-provider-select="gemini"></select>
+              <input type="text" id="aiCfgGeminiModel" class="mt-6 hidden" list="geminiPresetModelsList" placeholder="gemini-2.5-flash" />
+              <datalist id="geminiPresetModelsList">
+                <option value="gemini-2.5-flash"></option>
+                <option value="gemini-2.5-pro"></option>
+                <option value="gemini-2.0-flash"></option>
+                <option value="gemini-2.5-flash-lite"></option>
+              </datalist>
+            </div>
+          </div>
+          <div class="hint-text mt-6" id="aiCfgModelStatus_gemini"></div>
+        </div>
+
+        <!-- Provider 2: ChatGPT / OpenAI -->
+        <div class="completion-details-card mt-12">
+          <div class="section-heading">
+            <span>🤖 2. ChatGPT / OpenAI (hoặc API tương thích OpenAI)</span>
+            <button type="button" class="btn btn-secondary btn-xs btn-fetch-provider-models" data-fetch-provider="openai">
+              🔄 Tải DS Model OpenAI
+            </button>
+          </div>
+          <div class="form-group mt-12">
+            <label for="aiCfgOpenAiBaseUrl">API Base URL (Endpoint chuẩn OpenAI)</label>
+            <input type="text" id="aiCfgOpenAiBaseUrl" placeholder="https://api.openai.com/v1" />
+            <span class="hint-text">Mặc định OpenAI: <code>https://api.openai.com/v1</code> (hoặc Groq <code>https://api.groq.com/openai/v1</code>, OpenRouter...)</span>
+          </div>
+          <div class="form-row-2 mt-12">
+            <div class="form-group">
+              <label for="aiCfgOpenAiKey">OpenAI API Key</label>
+              <input type="password" id="aiCfgOpenAiKey" placeholder="sk-..." autocomplete="off" />
+            </div>
+            <div class="form-group">
+              <label for="aiCfgModelSelect_openai">Tên Model ChatGPT / OpenAI</label>
+              <select id="aiCfgModelSelect_openai" class="ai-cfg-model-select" data-provider-select="openai"></select>
+              <input type="text" id="aiCfgOpenAiModel" class="mt-6 hidden" list="openAiPresetModelsList" placeholder="gpt-4o-mini" />
+              <datalist id="openAiPresetModelsList">
+                <option value="gpt-4o-mini"></option>
+                <option value="gpt-4o"></option>
+                <option value="gpt-4.1-mini"></option>
+                <option value="gpt-4.1"></option>
+                <option value="o3-mini"></option>
+                <option value="o4-mini"></option>
+              </datalist>
+            </div>
+          </div>
+          <div class="hint-text mt-6" id="aiCfgModelStatus_openai"></div>
+        </div>
+
+        <!-- Provider 3: Anthropic Claude -->
+        <div class="completion-details-card mt-12">
+          <div class="section-heading">
+            <span>🧠 3. Anthropic Claude</span>
+            <button type="button" class="btn btn-secondary btn-xs btn-fetch-provider-models" data-fetch-provider="claude">
+              🔄 Tải DS Model Claude
+            </button>
+          </div>
+          <div class="form-group mt-12">
+            <label for="aiCfgClaudeBaseUrl">Claude API Base URL</label>
+            <input type="text" id="aiCfgClaudeBaseUrl" placeholder="https://api.anthropic.com" />
+          </div>
+          <div class="form-row-2 mt-12">
+            <div class="form-group">
+              <label for="aiCfgClaudeKey">Claude API Key</label>
+              <input type="password" id="aiCfgClaudeKey" placeholder="sk-ant-..." autocomplete="off" />
+            </div>
+            <div class="form-group">
+              <label for="aiCfgModelSelect_claude">Tên Model Claude</label>
+              <select id="aiCfgModelSelect_claude" class="ai-cfg-model-select" data-provider-select="claude"></select>
+              <input type="text" id="aiCfgClaudeModel" class="mt-6 hidden" list="claudePresetModelsList" placeholder="claude-sonnet-4-20250514" />
+              <datalist id="claudePresetModelsList">
+                <option value="claude-sonnet-4-20250514"></option>
+                <option value="claude-3-7-sonnet-latest"></option>
+                <option value="claude-3-5-haiku-latest"></option>
+              </datalist>
+            </div>
+          </div>
+          <div class="hint-text mt-6" id="aiCfgModelStatus_claude"></div>
+        </div>
+
+        <!-- Provider 4: DeepSeek -->
+        <div class="completion-details-card mt-12">
+          <div class="section-heading">
+            <span>🐋 4. DeepSeek</span>
+            <button type="button" class="btn btn-secondary btn-xs btn-fetch-provider-models" data-fetch-provider="deepseek">
+              🔄 Tải DS Model DeepSeek
+            </button>
+          </div>
+          <div class="form-group mt-12">
+            <label for="aiCfgDeepSeekBaseUrl">DeepSeek API Base URL</label>
+            <input type="text" id="aiCfgDeepSeekBaseUrl" placeholder="https://api.deepseek.com/v1" />
+          </div>
+          <div class="form-row-2 mt-12">
+            <div class="form-group">
+              <label for="aiCfgDeepSeekKey">DeepSeek API Key</label>
+              <input type="password" id="aiCfgDeepSeekKey" placeholder="sk-..." autocomplete="off" />
+            </div>
+            <div class="form-group">
+              <label for="aiCfgModelSelect_deepseek">Tên Model DeepSeek</label>
+              <select id="aiCfgModelSelect_deepseek" class="ai-cfg-model-select" data-provider-select="deepseek"></select>
+              <input type="text" id="aiCfgDeepSeekModel" class="mt-6 hidden" list="deepSeekPresetModelsList" placeholder="deepseek-chat" />
+              <datalist id="deepSeekPresetModelsList">
+                <option value="deepseek-chat"></option>
+                <option value="deepseek-reasoner"></option>
+              </datalist>
+            </div>
+          </div>
+          <div class="hint-text mt-6" id="aiCfgModelStatus_deepseek"></div>
+        </div>
+
+        <!-- Provider 5: Ollama Local -->
+        <div class="completion-details-card mt-12">
+          <div class="section-heading">
+            <span>🦙 5. Ollama (Chạy Model AI Local trên máy)</span>
+            <button type="button" class="btn btn-secondary btn-xs btn-fetch-provider-models" id="btnFetchOllamaModels" data-fetch-provider="ollama">
+              🔄 Tải DS Model Ollama
+            </button>
+          </div>
+          <div class="form-row-2 mt-12">
+            <div class="form-group">
+              <label for="aiCfgOllamaBaseUrl">Ollama Host URL</label>
+              <input type="text" id="aiCfgOllamaBaseUrl" placeholder="http://127.0.0.1:11434" />
+            </div>
+            <div class="form-group">
+              <label for="aiCfgModelSelect_ollama">Tên Model Ollama</label>
+              <select id="aiCfgModelSelect_ollama" class="ai-cfg-model-select" data-provider-select="ollama"></select>
+              <input type="text" id="aiCfgOllamaModel" class="mt-6 hidden" list="ollamaPresetModelsList" placeholder="llama3.2" />
+              <datalist id="ollamaPresetModelsList">
+                <option value="llama3.2"></option>
+                <option value="qwen2.5"></option>
+                <option value="gemma3"></option>
+                <option value="deepseek-r1"></option>
+              </datalist>
+            </div>
+          </div>
+          <div class="hint-text mt-6" id="aiCfgModelStatus_ollama"></div>
+        </div>
+      </form>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-close-modal="aiChatSettingsModal">Đóng</button>
+        <button type="submit" form="aiChatSettingsForm" class="btn btn-ai">
+          💾 Lưu Cài Đặt Chatbox AI
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL 8: VAI TRÒ AI / SYSTEM PROMPT CHO CUỘC TRÒ CHUYỆN HIỆN TẠI          -->
+  <!-- ========================================================================= -->
+  <div class="modal-backdrop hidden" id="aiChatPromptModal">
+    <div class="modal-container modal-md">
+      <div class="modal-header ai-modal-header">
+        <div>
+          <h2>🎭 Vai Trò AI & Chỉ Dẫn Hệ Thống (Copilot)</h2>
+          <p class="modal-subtitle">Tùy chỉnh cách AI trả lời riêng cho cuộc trò chuyện đang mở</p>
+        </div>
+        <button class="modal-close" data-close-modal="aiChatPromptModal">✕</button>
+      </div>
+
+      <form id="aiChatPromptForm" class="modal-body">
+        <div class="form-group">
+          <label for="aiPromptModalPresetSelect">Chọn mẫu Copilot có sẵn:</label>
+          <select id="aiPromptModalPresetSelect"></select>
+        </div>
+        <div class="form-group mt-12">
+          <label for="aiPromptModalTextarea">Nội dung System Prompt:</label>
+          <textarea
+            id="aiPromptModalTextarea"
+            rows="7"
+            placeholder="Nhập chỉ dẫn vai trò cho AI (VD: Bạn là chuyên gia văn thư hành chính...)"
+          ></textarea>
+        </div>
+      </form>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-close-modal="aiChatPromptModal">Hủy</button>
+        <button type="submit" form="aiChatPromptForm" class="btn btn-ai">
+          💾 Áp dụng cho cuộc trò chuyện
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL 9: MÃ NGUỒN GOOGLE APPS SCRIPT (Code.gs & Dashboard.html)           -->
+  <!-- ========================================================================= -->
+  <div class="modal-backdrop hidden" id="appsScriptModal">
+    <div class="modal-container modal-xl">
+      <div class="modal-header">
+        <div>
+          <h2>📜 Mã Nguồn Google Apps Script & Dashboard Tổng Hợp</h2>
+          <p class="modal-subtitle">Sao chép 2 tệp dưới đây vào Google Sheet → Tiện ích mở rộng → Apps Script rồi Triển khai (Deploy Web App)</p>
+        </div>
+        <button class="modal-close" data-close-modal="appsScriptModal">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="auth-method-tabs" style="margin-bottom: 10px;">
+          <button type="button" class="auth-tab-btn active" data-gas-tab="code">
+            📄 1. Code.gs (API & Tổng hợp Sheet)
+          </button>
+          <button type="button" class="auth-tab-btn" data-gas-tab="dashboard">
+            📊 2. Dashboard.html (Giao diện theo dõi)
+          </button>
+          <button type="button" class="auth-tab-btn" data-gas-tab="guide">
+            📘 3. Hướng dẫn cài đặt từng bước
+          </button>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px;">
+          <span class="hint-text" id="gasTabHintText">
+            Tạo / mở tệp <b>Code.gs</b> trong Apps Script và dán toàn bộ mã sau:
+          </span>
+          <button type="button" class="btn btn-sheet btn-sm" id="btnCopyGasContent">
+            📋 Sao chép nội dung đang xem
+          </button>
+        </div>
+
+        <textarea
+          id="appsScriptCodeViewer"
+          class="apps-script-code-box"
+          rows="18"
+          readonly
+        ></textarea>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-close-modal="appsScriptModal">Đóng</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL 10: QUẢN LÝ PHIÊN BẢN & TỰ ĐỘNG CẬP NHẬT QUA GITHUB RELEASES        -->
+  <!-- ========================================================================= -->
+  <div class="modal-backdrop hidden" id="updateManagerModal">
+    <div class="modal-container modal-lg">
+      <div class="modal-header">
+        <div>
+          <h2>🔄 Quản Lý Phiên Bản & Cập Nhật Tự Động (GitHub)</h2>
+          <p class="modal-subtitle">Theo dõi phiên bản zOffice hiện tại, kiểm tra bản phát hành mới trên GitHub Releases và cập nhật 1 chạm (giữ nguyên dữ liệu)</p>
+        </div>
+        <button class="modal-close" data-close-modal="updateManagerModal">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Banner trạng thái phiên bản -->
+        <div class="update-banner-card">
+          <div>
+            <div class="update-version-row">
+              <span class="update-current-badge" id="updCurrentVersionBadge">zOffice v1.0.0</span>
+              <span class="update-last-checked" id="updLastCheckedText">Chưa kiểm tra</span>
+            </div>
+            <div class="update-status-text" id="updStatusBanner">
+              Cấu hình Repository GitHub bên dưới để kiểm tra bản phát hành mới.
+            </div>
+          </div>
+          <div class="inline-actions">
+            <button type="button" class="btn btn-secondary btn-sm" id="btnCheckUpdatesNow">
+              🔍 Kiểm tra ngay
+            </button>
+            <button type="button" class="btn btn-primary btn-sm hidden" id="btnInstallUpdateNow">
+              ⬇️ Tải & Cập nhật tự động
+            </button>
+          </div>
+        </div>
+
+        <!-- Thanh tiến trình tải & cài đặt -->
+        <div class="update-progress-wrap hidden" id="updateProgressWrap">
+          <div class="update-progress-track">
+            <div class="update-progress-fill" id="updProgressBar" style="width: 0%;"></div>
+          </div>
+          <div class="hint-text mt-6" id="updProgressText">Đang chuẩn bị...</div>
+        </div>
+
+        <!-- Cấu hình GitHub Repository -->
+        <div class="completion-details-card mt-12">
+          <div class="section-heading">
+            <span>⚙️ Cấu Hình Nguồn Cập Nhật GitHub Releases</span>
+            <button type="button" class="btn btn-secondary btn-xs" id="btnSaveUpdateConfig">
+              💾 Lưu cấu hình
+            </button>
+          </div>
+          <div class="form-row-2 mt-12">
+            <div class="form-group">
+              <label for="updGithubRepoInput">Repository GitHub (owner/repo hoặc URL)</label>
+              <input
+                type="text"
+                id="updGithubRepoInput"
+                placeholder="VD: nguyenvana/zOffice hoặc https://github.com/nguyenvana/zOffice"
+              />
+            </div>
+            <div class="form-group">
+              <label for="updGithubTokenInput">GitHub Token (chỉ cần nếu Repo ở chế độ Private)</label>
+              <input
+                type="password"
+                id="updGithubTokenInput"
+                placeholder="ghp_... (để trống nếu là repo Public)"
+                autocomplete="off"
+              />
+            </div>
+          </div>
+          <div class="form-row-2 mt-12">
+            <label class="checkbox-row">
+              <input type="checkbox" id="chkUpdAutoCheck" checked />
+              <span class="checkbox-title">🔄 Tự động kiểm tra bản mới mỗi khi mở zOffice</span>
+            </label>
+            <label class="checkbox-row">
+              <input type="checkbox" id="chkUpdIncludePre" />
+              <span class="checkbox-title">🧪 Bao gồm bản thử nghiệm (Pre-release)</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Chi tiết bản phát hành trên GitHub -->
+        <div class="completion-details-card mt-12">
+          <div class="section-heading">
+            <span>📦 Danh Sách Phiên Bản & Ghi Chú Phát Hành (Changelog)</span>
+            <div class="inline-actions">
+              <select id="updReleasesSelect" class="update-release-select">
+                <option value="">-- Chưa có dữ liệu phát hành --</option>
+              </select>
+              <button type="button" class="btn btn-ghost btn-xs hidden" id="btnOpenGithubRelease">
+                🌐 Mở GitHub
+              </button>
+            </div>
+          </div>
+          <pre class="update-changelog-box mt-12" id="updReleaseNotesBox">Bấm "Kiểm tra ngay" để tải danh sách bản phát hành từ GitHub Releases.</pre>
+        </div>
+
+        <!-- Lịch sử cập nhật & Khôi phục bản sao lưu -->
+        <div class="completion-details-card mt-12">
+          <div class="section-heading">
+            <span>🕒 Lịch Sử Cập Nhật & Bản Sao Lưu Cục Bộ</span>
+          </div>
+          <div id="updHistoryList" class="update-history-list mt-12">
+            <div class="empty-hint">Chưa có lịch sử cập nhật nào.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-close-modal="updateManagerModal">Đóng</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION CONTAINER -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

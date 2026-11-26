@@ -1,0 +1,13 @@
+# Dependencies
+node_modules/
+
+# User local data, API keys, credentials, Zalo session & stored documents
+data/
+
+# Local AI agent skills/workspace metadata
+.agents/
+
+# Logs & OS files
+*.log
+.DS_Store
+Thumbs.db

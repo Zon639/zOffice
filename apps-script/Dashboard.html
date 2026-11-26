@@ -1,0 +1,1540 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard Theo Dõi Công Việc Các Phòng Ban</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet"
+  />
+  <style>
+    :root {
+      --bg-page: #f4f7fb;
+      --bg-card: #ffffff;
+      --bg-subtle: #f8fafc;
+      --text-main: #0f172a;
+      --text-secondary: #334155;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+      --border-strong: #cbd5e1;
+
+      --primary: #0f766e;
+      --primary-hover: #115e59;
+      --primary-soft: #ccfbf1;
+
+      --processing: #0284c7;
+      --processing-bg: #e0f2fe;
+      --processing-border: #bae6fd;
+
+      --overdue: #dc2626;
+      --overdue-bg: #fee2e2;
+      --overdue-border: #fecaca;
+
+      --completed: #15803d;
+      --completed-bg: #dcfce7;
+      --completed-border: #bbf7d0;
+
+      --warning: #b45309;
+      --warning-bg: #fef3c7;
+
+      --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
+      --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.07);
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background-color: var(--bg-page);
+      color: var(--text-main);
+      font-size: 14px;
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    .mono {
+      font-family: "Fira Code", Consolas, monospace;
+    }
+
+    button,
+    select,
+    input {
+      font-family: inherit;
+    }
+
+    button:focus-visible,
+    select:focus-visible,
+    input:focus-visible,
+    a:focus-visible {
+      outline: 2px solid var(--primary);
+      outline-offset: 2px;
+    }
+
+    .page-shell {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 18px 20px 36px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* ==================== TOP HEADER ==================== */
+    .topbar {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 16px 20px;
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .brand-group {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .brand-icon {
+      width: 42px;
+      height: 42px;
+      border-radius: 11px;
+      background: linear-gradient(135deg, #0f766e, #0284c7);
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      box-shadow: 0 4px 10px rgba(15, 118, 110, 0.22);
+    }
+
+    .brand-title {
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: var(--text-main);
+    }
+
+    .brand-subtitle {
+      font-size: 12.5px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 2px;
+    }
+
+    .live-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 2px 9px;
+      border-radius: 999px;
+      background: #f0fdf4;
+      color: #166534;
+      border: 1px solid #bbf7d0;
+      font-size: 11.5px;
+      font-weight: 600;
+    }
+
+    .live-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #16a34a;
+    }
+
+    .topbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      padding: 8px 13px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-strong);
+      background: var(--bg-card);
+      color: var(--text-main);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background-color 0.16s ease, border-color 0.16s ease, transform 0.12s ease;
+    }
+
+    .btn:hover:not(:disabled) {
+      background: var(--bg-subtle);
+      border-color: #94a3b8;
+    }
+
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #ffffff;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: var(--primary-hover);
+      border-color: var(--primary-hover);
+    }
+
+    .auto-refresh-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: var(--radius-sm);
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      cursor: pointer;
+    }
+
+    /* ==================== DEPARTMENT PILLS BAR ==================== */
+    .dept-bar {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 12px 14px;
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .dept-bar-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .dept-bar-title {
+      font-size: 12.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .dept-pills {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .dept-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 7px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--border-strong);
+      background: var(--bg-subtle);
+      color: var(--text-secondary);
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .dept-pill:hover {
+      background: #e2e8f0;
+      color: var(--text-main);
+    }
+
+    .dept-pill.active {
+      background: #0f172a;
+      border-color: #0f172a;
+      color: #ffffff;
+    }
+
+    .dept-pill-count {
+      padding: 1px 7px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      background: rgba(15, 23, 42, 0.09);
+      color: inherit;
+    }
+
+    .dept-pill.active .dept-pill-count {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .dept-pill-overdue {
+      padding: 1px 6px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      background: var(--overdue-bg);
+      color: var(--overdue);
+    }
+
+    /* ==================== KPI CARDS ==================== */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .kpi-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 16px 18px;
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      cursor: pointer;
+      transition: border-color 0.16s ease, box-shadow 0.16s ease;
+    }
+
+    .kpi-card:hover {
+      border-color: #94a3b8;
+      box-shadow: var(--shadow-md);
+    }
+
+    .kpi-card.is-selected {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.14);
+    }
+
+    .kpi-label {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .kpi-value {
+      font-size: 28px;
+      font-weight: 800;
+      line-height: 1.15;
+      margin-top: 6px;
+      color: var(--text-main);
+    }
+
+    .kpi-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .kpi-icon-box {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .kpi-total .kpi-icon-box { background: #f1f5f9; color: #334155; }
+    .kpi-processing .kpi-icon-box { background: var(--processing-bg); color: var(--processing); }
+    .kpi-processing .kpi-value { color: var(--processing); }
+    .kpi-overdue .kpi-icon-box { background: var(--overdue-bg); color: var(--overdue); }
+    .kpi-overdue .kpi-value { color: var(--overdue); }
+    .kpi-completed .kpi-icon-box { background: var(--completed-bg); color: var(--completed); }
+    .kpi-completed .kpi-value { color: var(--completed); }
+
+    /* ==================== DEPARTMENT BREAKDOWN PANEL ==================== */
+    .analytics-grid {
+      display: grid;
+      grid-template-columns: 1.25fr 1fr;
+      gap: 14px;
+    }
+
+    .panel-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 16px 18px;
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .panel-title {
+      font-size: 14.5px;
+      font-weight: 700;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .chart-legend {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-weight: 600;
+    }
+
+    .legend-swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 3px;
+    }
+
+    .dept-chart-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .dept-bar-row {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 8px 10px;
+      border-radius: var(--radius-sm);
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: background-color 0.14s ease, border-color 0.14s ease;
+    }
+
+    .dept-bar-row:hover {
+      background: var(--bg-subtle);
+      border-color: var(--border);
+    }
+
+    .dept-bar-row.selected {
+      background: #f0fdfa;
+      border-color: #99f6e4;
+    }
+
+    .dept-bar-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 12.5px;
+    }
+
+    .dept-bar-name {
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .dept-bar-nums {
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 600;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .stacked-track {
+      height: 12px;
+      border-radius: 999px;
+      background: #e2e8f0;
+      overflow: hidden;
+      display: flex;
+    }
+
+    .seg-completed { background: #16a34a; }
+    .seg-processing { background: #0284c7; }
+    .seg-overdue { background: #dc2626; }
+
+    /* ==================== TABLES ==================== */
+    .table-wrap {
+      width: 100%;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 13px;
+    }
+
+    th {
+      background: var(--bg-subtle);
+      color: var(--text-secondary);
+      font-size: 11.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+      color: var(--text-main);
+    }
+
+    tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    .tasks-table tbody tr {
+      cursor: pointer;
+      transition: background-color 0.12s ease;
+    }
+
+    .tasks-table tbody tr:hover {
+      background: #f8fafc;
+    }
+
+    .dept-summary-row {
+      cursor: pointer;
+    }
+
+    .dept-summary-row:hover {
+      background: #f8fafc;
+    }
+
+    /* ==================== FILTER TOOLBAR ==================== */
+    .filter-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .status-tabs {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .status-tab {
+      padding: 7px 12px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--bg-subtle);
+      color: var(--text-secondary);
+      font-size: 12.5px;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.14s ease;
+    }
+
+    .status-tab.active {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #ffffff;
+    }
+
+    .filter-inputs {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .input-ctrl,
+    .select-ctrl {
+      padding: 7px 11px;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-sm);
+      background: var(--bg-card);
+      color: var(--text-main);
+      font-size: 13px;
+    }
+
+    .input-ctrl {
+      min-width: 240px;
+    }
+
+    /* ==================== BADGES ==================== */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 9px;
+      border-radius: 999px;
+      font-size: 11.5px;
+      font-weight: 700;
+      white-space: nowrap;
+      border: 1px solid transparent;
+    }
+
+    .badge-processing {
+      background: var(--processing-bg);
+      color: #0369a1;
+      border-color: var(--processing-border);
+    }
+
+    .badge-overdue {
+      background: var(--overdue-bg);
+      color: #b91c1c;
+      border-color: var(--overdue-border);
+    }
+
+    .badge-completed {
+      background: var(--completed-bg);
+      color: #15803d;
+      border-color: var(--completed-border);
+    }
+
+    .badge-urgent {
+      background: #fef2f2;
+      color: #b91c1c;
+      border-color: #fecaca;
+    }
+
+    .badge-important {
+      background: var(--warning-bg);
+      color: var(--warning);
+      border-color: #fde68a;
+    }
+
+    .badge-normal {
+      background: #f1f5f9;
+      color: #475569;
+      border-color: #cbd5e1;
+    }
+
+    .dept-tag {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: #eff6ff;
+      color: #1e40af;
+      border: 1px solid #bfdbfe;
+      font-size: 11.5px;
+      font-weight: 700;
+    }
+
+    .empty-state {
+      padding: 40px 20px;
+      text-align: center;
+      color: var(--text-muted);
+    }
+
+    .empty-state h3 {
+      color: var(--text-main);
+      font-size: 15px;
+      margin-bottom: 6px;
+    }
+
+    /* ==================== DETAIL MODAL ==================== */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.52);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      z-index: 50;
+    }
+
+    .modal-backdrop.hidden {
+      display: none;
+    }
+
+    .modal-card {
+      background: var(--bg-card);
+      border-radius: var(--radius-lg);
+      max-width: 720px;
+      width: 100%;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 20px 40px rgba(15, 23, 42, 0.25);
+    }
+
+    .modal-head {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .modal-body {
+      padding: 18px 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .detail-field {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+    }
+
+    .detail-field-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 3px;
+    }
+
+    .detail-field-val {
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--text-main);
+      word-break: break-word;
+    }
+
+    @media (max-width: 1024px) {
+      .kpi-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .analytics-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .kpi-grid {
+        grid-template-columns: 1fr;
+      }
+      .detail-grid {
+        grid-template-columns: 1fr;
+      }
+      .input-ctrl {
+        min-width: 100%;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      * {
+        transition: none !important;
+        animation: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page-shell">
+    <!-- TOP BAR -->
+    <header class="topbar">
+      <div class="brand-group">
+        <div class="brand-icon" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+            <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+            <rect x="14" y="14" width="7" height="7" rx="1"></rect>
+            <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+          </svg>
+        </div>
+        <div>
+          <h1 class="brand-title">Dashboard Theo Dõi Công Việc Các Phòng Ban</h1>
+          <div class="brand-subtitle">
+            <span class="live-pill" role="status" aria-live="polite" id="syncStatusPill">
+              <span class="live-dot"></span>
+              <span id="lastUpdatedText">Đang tải dữ liệu...</span>
+            </span>
+            <span id="scopeBadgeText">Phạm vi: Tất cả phòng ban</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="topbar-actions">
+        <label class="auto-refresh-label" title="Tự động cập nhật số liệu mỗi 60 giây">
+          <input type="checkbox" id="chkAutoRefresh" checked />
+          <span>Tự động làm mới (60s)</span>
+        </label>
+        <button type="button" class="btn" id="btnExportCsv">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Xuất CSV
+        </button>
+        <a href="#" target="_blank" rel="noopener noreferrer" class="btn hidden" id="linkOpenSheet">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          Mở Google Sheet
+        </a>
+        <button type="button" class="btn btn-primary" id="btnRefreshNow">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          Làm mới
+        </button>
+      </div>
+    </header>
+
+    <!-- DEPARTMENT SWITCHER PILLS -->
+    <section class="dept-bar" aria-label="Bộ lọc theo phòng ban chuyên môn">
+      <div class="dept-bar-head">
+        <div class="dept-bar-title">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/></svg>
+          Chọn phạm vi theo dõi theo phòng ban / đơn vị chuyên môn
+        </div>
+        <select id="deptSelect" class="select-ctrl" aria-label="Chọn phòng ban">
+          <option value="">Tất cả các phòng ban</option>
+        </select>
+      </div>
+      <div class="dept-pills" id="deptPillsContainer"></div>
+    </section>
+
+    <!-- KPI CARDS -->
+    <section class="kpi-grid" aria-label="Chỉ số tổng hợp công việc">
+      <div class="kpi-card kpi-total is-selected" data-kpi-status="all" tabindex="0" role="button">
+        <div>
+          <div class="kpi-label">Tổng số công việc</div>
+          <div class="kpi-value" id="kpiTotal">0</div>
+          <div class="kpi-sub" id="kpiScopeSub">Tất cả phòng ban</div>
+        </div>
+        <div class="kpi-icon-box" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg>
+        </div>
+      </div>
+
+      <div class="kpi-card kpi-processing" data-kpi-status="processing" tabindex="0" role="button">
+        <div>
+          <div class="kpi-label">Đang thực hiện</div>
+          <div class="kpi-value" id="kpiProcessing">0</div>
+          <div class="kpi-sub">Trong thời hạn xử lý</div>
+        </div>
+        <div class="kpi-icon-box" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </div>
+      </div>
+
+      <div class="kpi-card kpi-overdue" data-kpi-status="overdue" tabindex="0" role="button">
+        <div>
+          <div class="kpi-label">Quá hạn</div>
+          <div class="kpi-value" id="kpiOverdue">0</div>
+          <div class="kpi-sub">Cần đôn đốc khẩn</div>
+        </div>
+        <div class="kpi-icon-box" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </div>
+      </div>
+
+      <div class="kpi-card kpi-completed" data-kpi-status="completed" tabindex="0" role="button">
+        <div>
+          <div class="kpi-label">Đã hoàn thành</div>
+          <div class="kpi-value" id="kpiCompleted">0</div>
+          <div class="kpi-sub" id="kpiCompletionRate">Tỷ lệ hoàn thành: 0%</div>
+        </div>
+        <div class="kpi-icon-box" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        </div>
+      </div>
+    </section>
+
+    <!-- ANALYTICS: DEPARTMENT CHART + SUMMARY TABLE -->
+    <section class="analytics-grid">
+      <div class="panel-card">
+        <div class="panel-header">
+          <h2 class="panel-title">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+            Tiến độ theo từng Phòng ban (Bấm để lọc)
+          </h2>
+          <div class="chart-legend">
+            <span class="legend-item"><span class="legend-swatch seg-completed"></span>Đã hoàn thành</span>
+            <span class="legend-item"><span class="legend-swatch seg-processing"></span>Đang thực hiện</span>
+            <span class="legend-item"><span class="legend-swatch seg-overdue"></span>Quá hạn</span>
+          </div>
+        </div>
+        <div class="dept-chart-list" id="deptChartList"></div>
+      </div>
+
+      <div class="panel-card">
+        <div class="panel-header">
+          <h2 class="panel-title">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 3h18v18H3z"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+            Bảng tổng hợp số liệu các phòng
+          </h2>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Phòng ban</th>
+                <th>Tổng</th>
+                <th>Đang làm</th>
+                <th>Quá hạn</th>
+                <th>Xong</th>
+                <th>Tỷ lệ</th>
+              </tr>
+            </thead>
+            <tbody id="deptSummaryTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TASK LIST & FILTERS -->
+    <section class="panel-card">
+      <div class="filter-toolbar">
+        <div class="status-tabs" role="tablist" aria-label="Lọc theo trạng thái">
+          <button type="button" class="status-tab active" data-status-tab="all">Tất cả (<span id="tabCntAll">0</span>)</button>
+          <button type="button" class="status-tab" data-status-tab="processing">Đang thực hiện (<span id="tabCntProcessing">0</span>)</button>
+          <button type="button" class="status-tab" data-status-tab="overdue">Quá hạn (<span id="tabCntOverdue">0</span>)</button>
+          <button type="button" class="status-tab" data-status-tab="completed">Đã hoàn thành (<span id="tabCntCompleted">0</span>)</button>
+        </div>
+
+        <div class="filter-inputs">
+          <input
+            type="search"
+            id="searchInput"
+            class="input-ctrl"
+            placeholder="Tìm Số/Ký hiệu, Trích yếu, Người phụ trách..."
+            aria-label="Tìm kiếm công việc"
+          />
+          <select id="specialistSelect" class="select-ctrl" aria-label="Lọc theo chuyên viên">
+            <option value="">Tất cả chuyên viên</option>
+          </select>
+          <select id="prioritySelect" class="select-ctrl" aria-label="Lọc theo độ khẩn">
+            <option value="">Tất cả độ khẩn</option>
+            <option value="urgent">Hỏa tốc / Thượng khẩn</option>
+            <option value="important">Khẩn / Quan trọng</option>
+            <option value="normal">Thường</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="tasks-table">
+          <thead>
+            <tr>
+              <th>Số / Ký hiệu</th>
+              <th>Phòng ban</th>
+              <th>Nội dung công việc</th>
+              <th>Chuyên viên / Phụ trách</th>
+              <th>Hạn xử lý</th>
+              <th>Độ khẩn</th>
+              <th>Trạng thái</th>
+            </tr>
+          </thead>
+          <tbody id="tasksTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <!-- DETAIL MODAL -->
+  <div class="modal-backdrop hidden" id="detailModal" role="dialog" aria-modal="true" aria-labelledby="detailModalTitle">
+    <div class="modal-card">
+      <div class="modal-head">
+        <div>
+          <div class="mono" style="font-size:12px;color:#0f766e;font-weight:700;" id="detailDocNumber"></div>
+          <h2 id="detailModalTitle" style="font-size:16px;font-weight:800;margin-top:2px;">Chi tiết công việc</h2>
+        </div>
+        <button type="button" class="btn" id="btnCloseDetailModal" aria-label="Đóng">Đóng</button>
+      </div>
+      <div class="modal-body" id="detailModalBody"></div>
+    </div>
+  </div>
+
+  <script>
+    const INITIAL_DEPT = <?!= JSON.stringify(initialDept || "") ?>;
+
+    const appState = {
+      department: INITIAL_DEPT || "",
+      status: "all",
+      priority: "",
+      specialist: "",
+      search: "",
+      latestData: null,
+      refreshTimer: null,
+    };
+
+    function escapeHtml(val) {
+      return String(val ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function formatDateVN(str) {
+      if (!str) return "—";
+      const d = new Date(str);
+      if (isNaN(d.getTime())) return str;
+      const pad = (n) => String(n).padStart(2, "0");
+      return (
+        pad(d.getDate()) +
+        "/" +
+        pad(d.getMonth() + 1) +
+        "/" +
+        d.getFullYear() +
+        " " +
+        pad(d.getHours()) +
+        ":" +
+        pad(d.getMinutes())
+      );
+    }
+
+    function renderStatusBadge(status, label) {
+      const cls =
+        status === "completed"
+          ? "badge-completed"
+          : status === "overdue"
+          ? "badge-overdue"
+          : "badge-processing";
+      return '<span class="badge ' + cls + '">' + escapeHtml(label) + "</span>";
+    }
+
+    function renderPriorityBadge(priority, label) {
+      const cls =
+        priority === "urgent"
+          ? "badge-urgent"
+          : priority === "important"
+          ? "badge-important"
+          : "badge-normal";
+      return '<span class="badge ' + cls + '">' + escapeHtml(label || "Thường") + "</span>";
+    }
+
+    function selectDepartment(dept) {
+      appState.department = dept;
+      loadDashboard();
+    }
+
+    function selectStatus(status) {
+      appState.status = status;
+      loadDashboard();
+    }
+
+    function renderDepartmentControls(data) {
+      const select = document.getElementById("deptSelect");
+      const pills = document.getElementById("deptPillsContainer");
+      const stats = data.departmentStats || [];
+      const global = data.globalSummary || { total: 0, overdue: 0 };
+
+      select.innerHTML =
+        '<option value="">Tất cả các phòng ban (' +
+        global.total +
+        ")</option>" +
+        stats
+          .map(function (d) {
+            return (
+              '<option value="' +
+              escapeHtml(d.department) +
+              '">' +
+              escapeHtml(d.department) +
+              " (" +
+              d.total +
+              ")</option>"
+            );
+          })
+          .join("");
+      select.value = appState.department;
+
+      let html =
+        '<button type="button" class="dept-pill ' +
+        (!appState.department ? "active" : "") +
+        '" onclick="selectDepartment(\'\')">' +
+        "<span>Tất cả phòng ban</span>" +
+        '<span class="dept-pill-count">' +
+        global.total +
+        "</span>" +
+        (global.overdue > 0
+          ? '<span class="dept-pill-overdue">' + global.overdue + " trễ</span>"
+          : "") +
+        "</button>";
+
+      html += stats
+        .map(function (d) {
+          const isActive = appState.department === d.department;
+          return (
+            '<button type="button" class="dept-pill ' +
+            (isActive ? "active" : "") +
+            '" onclick="selectDepartment(\'' +
+            escapeHtml(d.department).replace(/'/g, "\\'") +
+            "')\">" +
+            "<span>" +
+            escapeHtml(d.department) +
+            "</span>" +
+            '<span class="dept-pill-count">' +
+            d.total +
+            "</span>" +
+            (d.overdue > 0
+              ? '<span class="dept-pill-overdue">' + d.overdue + " trễ</span>"
+              : "") +
+            "</button>"
+          );
+        })
+        .join("");
+
+      pills.innerHTML = html;
+    }
+
+    function renderKPIs(data) {
+      const s = data.scopedSummary || {
+        total: 0,
+        processing: 0,
+        overdue: 0,
+        completed: 0,
+        completionRate: 0,
+      };
+      document.getElementById("kpiTotal").textContent = s.total;
+      document.getElementById("kpiProcessing").textContent = s.processing;
+      document.getElementById("kpiOverdue").textContent = s.overdue;
+      document.getElementById("kpiCompleted").textContent = s.completed;
+      document.getElementById("kpiCompletionRate").textContent =
+        "Tỷ lệ hoàn thành: " + s.completionRate + "%";
+      document.getElementById("kpiScopeSub").textContent = appState.department
+        ? appState.department
+        : "Tất cả phòng ban";
+
+      document.getElementById("scopeBadgeText").textContent =
+        "Phạm vi: " + (appState.department || "Tất cả phòng ban");
+
+      document.getElementById("tabCntAll").textContent = s.total;
+      document.getElementById("tabCntProcessing").textContent = s.processing;
+      document.getElementById("tabCntOverdue").textContent = s.overdue;
+      document.getElementById("tabCntCompleted").textContent = s.completed;
+
+      document.querySelectorAll(".kpi-card").forEach(function (el) {
+        el.classList.toggle("is-selected", el.dataset.kpiStatus === appState.status);
+      });
+      document.querySelectorAll(".status-tab").forEach(function (el) {
+        el.classList.toggle("active", el.dataset.statusTab === appState.status);
+      });
+    }
+
+    function renderDepartmentAnalytics(data) {
+      const stats = data.departmentStats || [];
+      const chartList = document.getElementById("deptChartList");
+      const tbody = document.getElementById("deptSummaryTableBody");
+
+      const maxTotal = Math.max(
+        1,
+        stats.reduce(function (m, d) {
+          return Math.max(m, d.total);
+        }, 0)
+      );
+
+      chartList.innerHTML = stats
+        .map(function (d) {
+          const isSelected = appState.department === d.department;
+          const pctCompleted = d.total > 0 ? (d.completed / maxTotal) * 100 : 0;
+          const pctProcessing = d.total > 0 ? (d.processing / maxTotal) * 100 : 0;
+          const pctOverdue = d.total > 0 ? (d.overdue / maxTotal) * 100 : 0;
+          return (
+            '<div class="dept-bar-row ' +
+            (isSelected ? "selected" : "") +
+            '" onclick="selectDepartment(\'' +
+            escapeHtml(d.department).replace(/'/g, "\\'") +
+            "')\">" +
+            '<div class="dept-bar-meta">' +
+            '<span class="dept-bar-name">' +
+            escapeHtml(d.department) +
+            "</span>" +
+            '<span class="dept-bar-nums">' +
+            "<span>Tổng: <b>" +
+            d.total +
+            "</b></span>" +
+            '<span style="color:#15803d;">Xong: ' +
+            d.completed +
+            "</span>" +
+            '<span style="color:#0284c7;">Đang làm: ' +
+            d.processing +
+            "</span>" +
+            '<span style="color:#dc2626;">Quá hạn: ' +
+            d.overdue +
+            "</span>" +
+            "</span>" +
+            "</div>" +
+            '<div class="stacked-track" role="img" aria-label="' +
+            escapeHtml(d.department) +
+            ": " +
+            d.completed +
+            " hoàn thành, " +
+            d.processing +
+            " đang làm, " +
+            d.overdue +
+            ' quá hạn">' +
+            '<div class="seg-completed" style="width:' +
+            pctCompleted +
+            '%"></div>' +
+            '<div class="seg-processing" style="width:' +
+            pctProcessing +
+            '%"></div>' +
+            '<div class="seg-overdue" style="width:' +
+            pctOverdue +
+            '%"></div>' +
+            "</div>" +
+            "</div>"
+          );
+        })
+        .join("");
+
+      tbody.innerHTML = stats
+        .map(function (d) {
+          return (
+            '<tr class="dept-summary-row" onclick="selectDepartment(\'' +
+            escapeHtml(d.department).replace(/'/g, "\\'") +
+            "')\">" +
+            "<td><b>" +
+            escapeHtml(d.department) +
+            "</b></td>" +
+            "<td><b>" +
+            d.total +
+            "</b></td>" +
+            '<td style="color:#0284c7;font-weight:700;">' +
+            d.processing +
+            "</td>" +
+            '<td style="color:#dc2626;font-weight:700;">' +
+            d.overdue +
+            "</td>" +
+            '<td style="color:#15803d;font-weight:700;">' +
+            d.completed +
+            "</td>" +
+            "<td>" +
+            d.completionRate +
+            "%</td>" +
+            "</tr>"
+          );
+        })
+        .join("");
+    }
+
+    function renderTasksTable(data) {
+      const specSelect = document.getElementById("specialistSelect");
+      const prevSpec = appState.specialist;
+      const specs = data.specialists || [];
+      specSelect.innerHTML =
+        '<option value="">Tất cả chuyên viên</option>' +
+        specs
+          .map(function (sp) {
+            return (
+              '<option value="' + escapeHtml(sp) + '">' + escapeHtml(sp) + "</option>"
+            );
+          })
+          .join("");
+      specSelect.value = prevSpec;
+
+      const tbody = document.getElementById("tasksTableBody");
+      const items = data.items || [];
+
+      if (items.length === 0) {
+        tbody.innerHTML =
+          '<tr><td colspan="7"><div class="empty-state">' +
+          "<h3>Không có công việc phù hợp bộ lọc</h3>" +
+          "<p>Thử chọn phòng ban khác, chuyển tab trạng thái hoặc bỏ từ khóa tìm kiếm.</p>" +
+          "</div></td></tr>";
+        return;
+      }
+
+      tbody.innerHTML = items
+        .map(function (item, idx) {
+          const who = [
+            item.specialistName ? "CV: " + item.specialistName : "",
+            item.assigneesText ? "Thực hiện: " + item.assigneesText : "",
+          ]
+            .filter(Boolean)
+            .join(" • ");
+
+          return (
+            '<tr onclick="openDetailModal(' +
+            idx +
+            ')">' +
+            '<td class="mono" style="font-weight:600;white-space:nowrap;">' +
+            escapeHtml(item.docNumber || "Chưa số") +
+            "</td>" +
+            '<td><span class="dept-tag">' +
+            escapeHtml(item.department) +
+            "</span></td>" +
+            '<td><div style="font-weight:700;">' +
+            escapeHtml(item.title) +
+            "</div>" +
+            (item.issuer
+              ? '<div style="font-size:12px;color:#64748b;margin-top:2px;">Nguồn: ' +
+                escapeHtml(item.issuer) +
+                "</div>"
+              : "") +
+            "</td>" +
+            '<td style="font-size:12.5px;color:#334155;">' +
+            escapeHtml(who || "—") +
+            "</td>" +
+            '<td style="white-space:nowrap;font-size:12.5px;">' +
+            escapeHtml(formatDateVN(item.dueDate)) +
+            "</td>" +
+            "<td>" +
+            renderPriorityBadge(item.priority, item.priorityLabel) +
+            "</td>" +
+            "<td>" +
+            renderStatusBadge(item.effectiveStatus, item.effectiveStatusLabel) +
+            "</td>" +
+            "</tr>"
+          );
+        })
+        .join("");
+    }
+
+    function openDetailModal(idx) {
+      const items = (appState.latestData && appState.latestData.items) || [];
+      const item = items[idx];
+      if (!item) return;
+
+      document.getElementById("detailDocNumber").textContent =
+        "Số / Ký hiệu: " + (item.docNumber || "Chưa số");
+      document.getElementById("detailModalTitle").textContent = item.title || "Chi tiết công việc";
+
+      const body = document.getElementById("detailModalBody");
+      body.innerHTML =
+        '<div class="detail-grid">' +
+        '<div class="detail-field"><div class="detail-field-label">Phòng ban chuyên môn</div><div class="detail-field-val">' +
+        escapeHtml(item.department) +
+        "</div></div>" +
+        '<div class="detail-field"><div class="detail-field-label">Trạng thái</div><div class="detail-field-val">' +
+        renderStatusBadge(item.effectiveStatus, item.effectiveStatusLabel) +
+        " " +
+        renderPriorityBadge(item.priority, item.priorityLabel) +
+        "</div></div>" +
+        '<div class="detail-field"><div class="detail-field-label">Chuyên viên giao việc</div><div class="detail-field-val">' +
+        escapeHtml(item.specialistName || "—") +
+        "</div></div>" +
+        '<div class="detail-field"><div class="detail-field-label">Người thực hiện (Zalo)</div><div class="detail-field-val">' +
+        escapeHtml(item.assigneesText || "—") +
+        "</div></div>" +
+        '<div class="detail-field"><div class="detail-field-label">Ngày nhận / Hạn xử lý</div><div class="detail-field-val">' +
+        escapeHtml(item.receivedDate || "—") +
+        " → " +
+        escapeHtml(formatDateVN(item.dueDate)) +
+        "</div></div>" +
+        '<div class="detail-field"><div class="detail-field-label">Cơ quan ban hành</div><div class="detail-field-val">' +
+        escapeHtml(item.issuer || "—") +
+        "</div></div>" +
+        "</div>" +
+        (item.notes
+          ? '<div class="detail-field"><div class="detail-field-label">Nội dung chỉ đạo / Giao việc</div><div class="detail-field-val" style="white-space:pre-wrap;font-weight:500;">' +
+            escapeHtml(item.notes) +
+            "</div></div>"
+          : "") +
+        (item.completionNote
+          ? '<div class="detail-field" style="background:#f0fdf4;border-color:#bbf7d0;"><div class="detail-field-label" style="color:#15803d;">Kết quả xử lý / Văn bản phúc đáp</div><div class="detail-field-val" style="white-space:pre-wrap;">' +
+            escapeHtml(item.completionNote) +
+            "</div></div>"
+          : "") +
+        '<div class="detail-field"><div class="detail-field-label">Tệp đính kèm (' +
+        item.attachmentCount +
+        ") & Nhật ký Zalo (" +
+        item.zaloSentCount +
+        ' lần)</div><div class="detail-field-val" style="font-weight:500;">' +
+        escapeHtml(item.attachmentSummary || "Không có tệp") +
+        "</div></div>";
+
+      document.getElementById("detailModal").classList.remove("hidden");
+    }
+
+    function exportCurrentCsv() {
+      const items = (appState.latestData && appState.latestData.items) || [];
+      if (items.length === 0) return;
+
+      const headers = [
+        "Số/Ký hiệu",
+        "Phòng ban",
+        "Trích yếu",
+        "Chuyên viên",
+        "Người thực hiện",
+        "Cơ quan ban hành",
+        "Ngày nhận",
+        "Hạn xử lý",
+        "Độ khẩn",
+        "Trạng thái",
+        "Kết quả phúc đáp",
+      ];
+      const csvCell = (v) => '"' + String(v ?? "").replace(/"/g, '""') + '"';
+      const rows = [headers.map(csvCell).join(",")];
+      items.forEach((it) => {
+        rows.push(
+          [
+            it.docNumber,
+            it.department,
+            it.title,
+            it.specialistName,
+            it.assigneesText,
+            it.issuer,
+            it.receivedDate,
+            it.dueDate,
+            it.priorityLabel,
+            it.effectiveStatusLabel,
+            it.completionNote,
+          ]
+            .map(csvCell)
+            .join(",")
+        );
+      });
+
+      const blob = new Blob(["\uFEFF" + rows.join("\r\n")], {
+        type: "text/csv;charset=utf-8;",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download =
+        "TongHop_CongViec_" +
+        (appState.department || "TatCaPhongBan").replace(/\s+/g, "_") +
+        ".csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function loadDashboard() {
+      const btn = document.getElementById("btnRefreshNow");
+      if (btn) btn.disabled = true;
+
+      google.script.run
+        .withSuccessHandler(function (data) {
+          appState.latestData = data;
+          if (data.spreadsheetUrl) {
+            const link = document.getElementById("linkOpenSheet");
+            link.href = data.spreadsheetUrl;
+            link.classList.remove("hidden");
+          }
+          document.getElementById("lastUpdatedText").textContent =
+            "Cập nhật lúc " + formatDateVN(data.generatedAt);
+
+          renderDepartmentControls(data);
+          renderKPIs(data);
+          renderDepartmentAnalytics(data);
+          renderTasksTable(data);
+          if (btn) btn.disabled = false;
+        })
+        .withFailureHandler(function (err) {
+          document.getElementById("lastUpdatedText").textContent =
+            "Lỗi tải dữ liệu: " + (err && err.message ? err.message : err);
+          if (btn) btn.disabled = false;
+        })
+        .getDashboardData({
+          department: appState.department,
+          status: appState.status,
+          priority: appState.priority,
+          specialist: appState.specialist,
+          search: appState.search,
+        });
+    }
+
+    function resetAutoRefresh() {
+      if (appState.refreshTimer) {
+        clearInterval(appState.refreshTimer);
+        appState.refreshTimer = null;
+      }
+      if (document.getElementById("chkAutoRefresh").checked) {
+        appState.refreshTimer = setInterval(loadDashboard, 60000);
+      }
+    }
+
+    document.addEventListener("DOMContentLoaded", function () {
+      document.getElementById("deptSelect").addEventListener("change", function (e) {
+        selectDepartment(e.target.value);
+      });
+      document.getElementById("specialistSelect").addEventListener("change", function (e) {
+        appState.specialist = e.target.value;
+        loadDashboard();
+      });
+      document.getElementById("prioritySelect").addEventListener("change", function (e) {
+        appState.priority = e.target.value;
+        loadDashboard();
+      });
+
+      let searchTimer = null;
+      document.getElementById("searchInput").addEventListener("input", function (e) {
+        appState.search = e.target.value;
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(loadDashboard, 250);
+      });
+
+      document.querySelectorAll(".kpi-card").forEach(function (card) {
+        card.addEventListener("click", function () {
+          selectStatus(card.dataset.kpiStatus);
+        });
+        card.addEventListener("keydown", function (e) {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            selectStatus(card.dataset.kpiStatus);
+          }
+        });
+      });
+
+      document.querySelectorAll(".status-tab").forEach(function (tab) {
+        tab.addEventListener("click", function () {
+          selectStatus(tab.dataset.statusTab);
+        });
+      });
+
+      document.getElementById("btnRefreshNow").addEventListener("click", loadDashboard);
+      document.getElementById("btnExportCsv").addEventListener("click", exportCurrentCsv);
+      document.getElementById("chkAutoRefresh").addEventListener("change", resetAutoRefresh);
+
+      document.getElementById("btnCloseDetailModal").addEventListener("click", function () {
+        document.getElementById("detailModal").classList.add("hidden");
+      });
+      document.getElementById("detailModal").addEventListener("click", function (e) {
+        if (e.target === e.currentTarget) {
+          e.currentTarget.classList.add("hidden");
+        }
+      });
+
+      loadDashboard();
+      resetAutoRefresh();
+    });
+  </script>
+</body>
+</html>

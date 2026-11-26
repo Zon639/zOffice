@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard Theo Dõi Công Việc Các Phòng Ban</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet"
+  />
+  <style>
+    :root {
+      --bg-page: #f4f7fb;
+      --bg-card: #ffffff;
+      --bg-subtle: #f8fafc;
+      --text-main: #0f172a;
+      --text-secondary: #334155;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+      --border-strong: #cbd5e1;
+      --primary: #0f766e;
+      --primary-hover: #115e59;
+      --processing: #0284c7;
+      --processing-bg: #e0f2fe;
+      --overdue: #dc2626;
+      --overdue-bg: #fee2e2;
+      --completed: #15803d;
+      --completed-bg: #dcfce7;
+      --warning: #b45309;
+      --warning-bg: #fef3c7;
+      --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background-color: var(--bg-page);
+      color: var(--text-main);
+      font-size: 14px;
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    .mono { font-family: "Fira Code", Consolas, monospace; }
+    button, select, input { font-family: inherit; }
+
+    button:focus-visible, select:focus-visible, input:focus-visible {
+      outline: 2px solid var(--primary);
+      outline-offset: 2px;
+    }
+
+    .page-shell {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 14px 14px 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .topbar {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 14px 16px;
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .brand-group { display: flex; align-items: center; gap: 12px; }
+    .brand-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #0f766e, #0284c7);
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .brand-title { font-size: 17px; font-weight: 800; }
+    .brand-subtitle {
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 2px;
+    }
+    .live-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: #f0fdf4;
+      color: #166534;
+      border: 1px solid #bbf7d0;
+      font-size: 11.5px;
+      font-weight: 600;
+    }
+
+    .topbar-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 7px 12px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-strong);
+      background: var(--bg-card);
+      color: var(--text-main);
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .btn-primary {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #ffffff;
+    }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .setup-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .setup-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .setup-row input {
+      flex: 1;
+      min-width: 220px;
+      padding: 8px 11px;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+    }
+
+    .panel-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 14px 16px;
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .panel-title { font-size: 14px; font-weight: 700; }
+
+    .dept-pills { display: flex; gap: 7px; flex-wrap: wrap; }
+    .dept-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 11px;
+      border-radius: 999px;
+      border: 1px solid var(--border-strong);
+      background: var(--bg-subtle);
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .dept-pill.active {
+      background: #0f172a;
+      border-color: #0f172a;
+      color: #ffffff;
+    }
+    .dept-pill-count {
+      padding: 1px 6px;
+      border-radius: 999px;
+      font-size: 11px;
+      background: rgba(15, 23, 42, 0.1);
+    }
+    .dept-pill.active .dept-pill-count { background: rgba(255, 255, 255, 0.22); }
+    .dept-pill-overdue {
+      padding: 1px 6px;
+      border-radius: 999px;
+      font-size: 11px;
+      background: var(--overdue-bg);
+      color: var(--overdue);
+      font-weight: 700;
+    }
+
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .kpi-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 14px 16px;
+      box-shadow: var(--shadow-sm);
+      cursor: pointer;
+    }
+    .kpi-card.is-selected {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.14);
+    }
+    .kpi-label { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+    .kpi-value { font-size: 26px; font-weight: 800; margin-top: 4px; }
+    .kpi-processing .kpi-value { color: var(--processing); }
+    .kpi-overdue .kpi-value { color: var(--overdue); }
+    .kpi-completed .kpi-value { color: var(--completed); }
+    .kpi-sub { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
+
+    .analytics-grid {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 12px;
+    }
+    .dept-bar-row {
+      padding: 7px 9px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+    }
+    .dept-bar-row.selected { background: #f0fdfa; border: 1px solid #99f6e4; }
+    .dept-bar-meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 12.5px;
+      margin-bottom: 4px;
+      flex-wrap: wrap;
+    }
+    .stacked-track {
+      height: 10px;
+      background: #e2e8f0;
+      border-radius: 999px;
+      overflow: hidden;
+      display: flex;
+    }
+    .seg-completed { background: #16a34a; }
+    .seg-processing { background: #0284c7; }
+    .seg-overdue { background: #dc2626; }
+
+    .filter-toolbar {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .status-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+    .status-tab {
+      padding: 6px 11px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--bg-subtle);
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .status-tab.active {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #ffffff;
+    }
+    .filter-inputs { display: flex; gap: 8px; flex-wrap: wrap; }
+    .input-ctrl, .select-ctrl {
+      padding: 7px 10px;
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-sm);
+      background: #fff;
+      font-size: 12.5px;
+    }
+    .input-ctrl { min-width: 210px; }
+
+    .table-wrap {
+      width: 100%;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+    }
+    table { width: 100%; border-collapse: collapse; text-align: left; font-size: 12.5px; }
+    th {
+      background: var(--bg-subtle);
+      color: var(--text-secondary);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 9px 10px;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    td { padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .badge-processing { background: var(--processing-bg); color: #0369a1; }
+    .badge-overdue { background: var(--overdue-bg); color: #b91c1c; }
+    .badge-completed { background: var(--completed-bg); color: #15803d; }
+    .badge-urgent { background: #fef2f2; color: #b91c1c; }
+    .badge-important { background: var(--warning-bg); color: var(--warning); }
+    .badge-normal { background: #f1f5f9; color: #475569; }
+    .dept-tag {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 6px;
+      background: #eff6ff;
+      color: #1e40af;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .hidden { display: none !important; }
+
+    @media (max-width: 1024px) {
+      .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .analytics-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 640px) {
+      .kpi-grid { grid-template-columns: 1fr; }
+      .input-ctrl { min-width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page-shell">
+    <header class="topbar">
+      <div class="brand-group">
+        <div class="brand-icon" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+            <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+            <rect x="14" y="14" width="7" height="7" rx="1"></rect>
+            <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+          </svg>
+        </div>
+        <div>
+          <h1 class="brand-title">Dashboard Theo Dõi Công Việc Các Phòng Ban</h1>
+          <div class="brand-subtitle">
+            <span class="live-pill" id="statusPill">Chưa kết nối API</span>
+            <span id="scopeText">Phạm vi: Tất cả phòng ban</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="topbar-actions">
+        <button type="button" class="btn" id="btnToggleSetup">⚙️ Đổi link Apps Script</button>
+        <button type="button" class="btn" id="btnExportCsv">📥 Xuất CSV</button>
+        <button type="button" class="btn btn-primary" id="btnRefresh">🔄 Làm mới</button>
+      </div>
+    </header>
+
+    <section class="setup-card hidden" id="setupBox">
+      <strong>Kết nối Web App Google Apps Script (không bị lỗi đa tài khoản trên Zalo / Chrome)</strong>
+      <p style="font-size:12.5px;color:#475569;">
+        Dán đường dẫn <code>https://script.google.com/macros/s/.../exec</code> hoặc mở trang này kèm tham số <code>?api=URL_EXEC</code>.
+      </p>
+      <div class="setup-row">
+        <input type="url" id="apiUrlInput" placeholder="https://script.google.com/macros/s/.../exec" />
+        <button type="button" class="btn btn-primary" id="btnSaveApiUrl">Lưu & Tải dữ liệu</button>
+      </div>
+    </section>
+
+    <div id="dashboardContent" class="hidden" style="display:flex;flex-direction:column;gap:14px;">
+      <section class="panel-card">
+        <div class="panel-header">
+          <span class="panel-title">Phòng ban / Đơn vị chuyên môn</span>
+          <select id="deptSelect" class="select-ctrl"><option value="">Tất cả phòng ban</option></select>
+        </div>
+        <div class="dept-pills" id="deptPills"></div>
+      </section>
+
+      <section class="kpi-grid">
+        <div class="kpi-card is-selected" data-kpi="all">
+          <div class="kpi-label">Tổng số công việc</div>
+          <div class="kpi-value" id="kpiTotal">0</div>
+          <div class="kpi-sub" id="kpiScope">Tất cả phòng ban</div>
+        </div>
+        <div class="kpi-card kpi-processing" data-kpi="processing">
+          <div class="kpi-label">Đang thực hiện</div>
+          <div class="kpi-value" id="kpiProcessing">0</div>
+          <div class="kpi-sub">Trong hạn</div>
+        </div>
+        <div class="kpi-card kpi-overdue" data-kpi="overdue">
+          <div class="kpi-label">Quá hạn</div>
+          <div class="kpi-value" id="kpiOverdue">0</div>
+          <div class="kpi-sub">Cần đôn đốc</div>
+        </div>
+        <div class="kpi-card kpi-completed" data-kpi="completed">
+          <div class="kpi-label">Đã hoàn thành</div>
+          <div class="kpi-value" id="kpiCompleted">0</div>
+          <div class="kpi-sub" id="kpiRate">Tỷ lệ: 0%</div>
+        </div>
+      </section>
+
+      <section class="analytics-grid">
+        <div class="panel-card">
+          <div class="panel-header">
+            <h2 class="panel-title">Tiến độ theo từng Phòng ban</h2>
+            <span style="font-size:12px;color:#475569;">Xong • Đang làm • Quá hạn</span>
+          </div>
+          <div id="deptBars"></div>
+        </div>
+
+        <div class="panel-card">
+          <h2 class="panel-title">Bảng tổng hợp các phòng</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Phòng ban</th><th>Tổng</th><th>Đang làm</th><th>Quá hạn</th><th>Xong</th><th>Tỷ lệ</th></tr>
+              </thead>
+              <tbody id="deptTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel-card">
+        <div class="filter-toolbar">
+          <div class="status-tabs">
+            <button type="button" class="status-tab active" data-tab="all">Tất cả (<span id="cntAll">0</span>)</button>
+            <button type="button" class="status-tab" data-tab="processing">Đang thực hiện (<span id="cntProc">0</span>)</button>
+            <button type="button" class="status-tab" data-tab="overdue">Quá hạn (<span id="cntOver">0</span>)</button>
+            <button type="button" class="status-tab" data-tab="completed">Đã hoàn thành (<span id="cntDone">0</span>)</button>
+          </div>
+          <div class="filter-inputs">
+            <input type="search" id="searchInput" class="input-ctrl" placeholder="Tìm Số/Ký hiệu, Trích yếu..." />
+            <select id="specialistSelect" class="select-ctrl"><option value="">Tất cả chuyên viên</option></select>
+            <select id="prioritySelect" class="select-ctrl">
+              <option value="">Tất cả độ khẩn</option>
+              <option value="urgent">Hỏa tốc / Thượng khẩn</option>
+              <option value="important">Khẩn / Quan trọng</option>
+              <option value="normal">Thường</option>
+            </select>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Số / Ký hiệu</th>
+                <th>Phòng ban</th>
+                <th>Nội dung công việc</th>
+                <th>Chuyên viên / Phụ trách</th>
+                <th>Hạn xử lý</th>
+                <th>Độ khẩn</th>
+                <th>Trạng thái</th>
+              </tr>
+            </thead>
+            <tbody id="tasksTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    // Có thể dán cố định URL Apps Script (/exec) của bạn vào đây trước khi đưa lên GitHub Pages / Netlify:
+    const DEFAULT_APPS_SCRIPT_URL = "";
+
+    const state = {
+      apiUrl: "",
+      department: "",
+      status: "all",
+      priority: "",
+      specialist: "",
+      search: "",
+      data: null,
+    };
+
+    function esc(v) {
+      return String(v ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function fmtDate(s) {
+      if (!s) return "—";
+      const d = new Date(s);
+      if (isNaN(d.getTime())) return s;
+      const p = (n) => String(n).padStart(2, "0");
+      return p(d.getDate()) + "/" + p(d.getMonth() + 1) + "/" + d.getFullYear() + " " + p(d.getHours()) + ":" + p(d.getMinutes());
+    }
+
+    function resolveInitialApiUrl() {
+      const qs = new URLSearchParams(location.search);
+      const fromQuery = (qs.get("api") || "").trim();
+      const fromHash = location.hash.startsWith("#api=") ? decodeURIComponent(location.hash.slice(5)).trim() : "";
+      const fromStore = (localStorage.getItem("qlcv_gas_api_url") || "").trim();
+      const url = fromQuery || fromHash || DEFAULT_APPS_SCRIPT_URL || fromStore;
+      if (fromQuery || fromHash) localStorage.setItem("qlcv_gas_api_url", url);
+      return url;
+    }
+
+    function selectDept(dept) {
+      state.department = dept;
+      loadData();
+    }
+
+    async function loadData() {
+      const statusPill = document.getElementById("statusPill");
+      const content = document.getElementById("dashboardContent");
+      const setup = document.getElementById("setupBox");
+      if (!state.apiUrl) {
+        setup.classList.remove("hidden");
+        content.classList.add("hidden");
+        statusPill.textContent = "Chưa có URL Apps Script";
+        return;
+      }
+
+      setup.classList.add("hidden");
+      content.classList.remove("hidden");
+      statusPill.textContent = "⏳ Đang tải...";
+
+      try {
+        const u = new URL(state.apiUrl);
+        u.searchParams.set("action", "data");
+        if (state.department) u.searchParams.set("department", state.department);
+        if (state.status !== "all") u.searchParams.set("status", state.status);
+        if (state.priority) u.searchParams.set("priority", state.priority);
+        if (state.specialist) u.searchParams.set("specialist", state.specialist);
+        if (state.search) u.searchParams.set("search", state.search);
+
+        // credentials: 'omit' tránh gửi cookie đa tài khoản Google (/u/1/, /u/2/)
+        const res = await fetch(u.toString(), {
+          method: "GET",
+          credentials: "omit",
+          redirect: "follow",
+        });
+        const data = await res.json();
+        if (!data || data.ok === false) throw new Error(data?.error || "Lỗi dữ liệu");
+        state.data = data;
+        statusPill.textContent = "● Cập nhật lúc " + fmtDate(data.generatedAt);
+        renderAll(data);
+      } catch (err) {
+        statusPill.textContent = "❌ " + (err.message || "Không tải được dữ liệu");
+      }
+    }
+
+    function renderAll(data) {
+      const stats = data.departmentStats || [];
+      const global = data.globalSummary || { total: 0, overdue: 0 };
+      const scoped = data.scopedSummary || { total: 0, processing: 0, overdue: 0, completed: 0, completionRate: 0 };
+
+      const deptSel = document.getElementById("deptSelect");
+      deptSel.innerHTML = '<option value="">Tất cả phòng ban (' + global.total + ')</option>' +
+        stats.map((d) => '<option value="' + esc(d.department) + '">' + esc(d.department) + ' (' + d.total + ')</option>').join("");
+      deptSel.value = state.department;
+
+      document.getElementById("deptPills").innerHTML =
+        '<button type="button" class="dept-pill ' + (!state.department ? 'active' : '') + '" onclick="selectDept(\'\')">' +
+        '<span>Tất cả phòng ban</span><span class="dept-pill-count">' + global.total + '</span>' +
+        (global.overdue > 0 ? '<span class="dept-pill-overdue">' + global.overdue + ' trễ</span>' : '') +
+        '</button>' +
+        stats.map((d) =>
+          '<button type="button" class="dept-pill ' + (state.department === d.department ? 'active' : '') + '" onclick="selectDept(\'' + esc(d.department).replace(/'/g, "\\'") + '\')">' +
+          '<span>' + esc(d.department) + '</span><span class="dept-pill-count">' + d.total + '</span>' +
+          (d.overdue > 0 ? '<span class="dept-pill-overdue">' + d.overdue + ' trễ</span>' : '') +
+          '</button>'
+        ).join("");
+
+      document.getElementById("scopeText").textContent = "Phạm vi: " + (state.department || "Tất cả phòng ban");
+      document.getElementById("kpiScope").textContent = state.department || "Tất cả phòng ban";
+      document.getElementById("kpiTotal").textContent = scoped.total;
+      document.getElementById("kpiProcessing").textContent = scoped.processing;
+      document.getElementById("kpiOverdue").textContent = scoped.overdue;
+      document.getElementById("kpiCompleted").textContent = scoped.completed;
+      document.getElementById("kpiRate").textContent = "Tỷ lệ: " + scoped.completionRate + "%";
+      document.getElementById("cntAll").textContent = scoped.total;
+      document.getElementById("cntProc").textContent = scoped.processing;
+      document.getElementById("cntOver").textContent = scoped.overdue;
+      document.getElementById("cntDone").textContent = scoped.completed;
+
+      document.querySelectorAll("[data-kpi]").forEach((el) => el.classList.toggle("is-selected", el.dataset.kpi === state.status));
+      document.querySelectorAll("[data-tab]").forEach((el) => el.classList.toggle("active", el.dataset.tab === state.status));
+
+      const maxT = Math.max(1, ...stats.map((d) => d.total));
+      document.getElementById("deptBars").innerHTML = stats.map((d) =>
+        '<div class="dept-bar-row ' + (state.department === d.department ? 'selected' : '') + '" onclick="selectDept(\'' + esc(d.department).replace(/'/g, "\\'") + '\')">' +
+        '<div class="dept-bar-meta"><b>' + esc(d.department) + '</b><span>Tổng: <b>' + d.total + '</b> • Xong: ' + d.completed + ' • Đang làm: ' + d.processing + ' • Quá hạn: ' + d.overdue + '</span></div>' +
+        '<div class="stacked-track">' +
+        '<div class="seg-completed" style="width:' + (d.total ? (d.completed / maxT) * 100 : 0) + '%"></div>' +
+        '<div class="seg-processing" style="width:' + (d.total ? (d.processing / maxT) * 100 : 0) + '%"></div>' +
+        '<div class="seg-overdue" style="width:' + (d.total ? (d.overdue / maxT) * 100 : 0) + '%"></div>' +
+        '</div></div>'
+      ).join("");
+
+      document.getElementById("deptTableBody").innerHTML = stats.map((d) =>
+        '<tr style="cursor:pointer" onclick="selectDept(\'' + esc(d.department).replace(/'/g, "\\'") + '\')">' +
+        '<td><b>' + esc(d.department) + '</b></td><td><b>' + d.total + '</b></td>' +
+        '<td style="color:#0284c7;font-weight:700">' + d.processing + '</td>' +
+        '<td style="color:#dc2626;font-weight:700">' + d.overdue + '</td>' +
+        '<td style="color:#15803d;font-weight:700">' + d.completed + '</td>' +
+        '<td>' + d.completionRate + '%</td></tr>'
+      ).join("");
+
+      const specSel = document.getElementById("specialistSelect");
+      const prevSpec = state.specialist;
+      specSel.innerHTML = '<option value="">Tất cả chuyên viên</option>' + (data.specialists || []).map((s) => '<option value="' + esc(s) + '">' + esc(s) + '</option>').join("");
+      specSel.value = prevSpec;
+
+      const items = data.items || [];
+      document.getElementById("tasksTableBody").innerHTML = items.length === 0
+        ? '<tr><td colspan="7" style="text-align:center;padding:26px;color:#64748b;">Không có công việc phù hợp bộ lọc.</td></tr>'
+        : items.map((it) => {
+            const stCls = it.effectiveStatus === "completed" ? "badge-completed" : it.effectiveStatus === "overdue" ? "badge-overdue" : "badge-processing";
+            const prCls = it.priority === "urgent" ? "badge-urgent" : it.priority === "important" ? "badge-important" : "badge-normal";
+            const who = [it.specialistName ? "CV: " + it.specialistName : "", it.assigneesText ? "Thực hiện: " + it.assigneesText : ""].filter(Boolean).join(" • ");
+            return '<tr>' +
+              '<td class="mono" style="font-weight:600;white-space:nowrap;">' + esc(it.docNumber || "Chưa số") + '</td>' +
+              '<td><span class="dept-tag">' + esc(it.department) + '</span></td>' +
+              '<td><b>' + esc(it.title) + '</b>' + (it.completionNote ? '<div style="font-size:11.5px;color:#15803d;margin-top:2px;">✓ ' + esc(it.completionNote) + '</div>' : '') + '</td>' +
+              '<td>' + esc(who || "—") + '</td>' +
+              '<td style="white-space:nowrap;">' + esc(fmtDate(it.dueDate)) + '</td>' +
+              '<td><span class="badge ' + prCls + '">' + esc(it.priorityLabel || "Thường") + '</span></td>' +
+              '<td><span class="badge ' + stCls + '">' + esc(it.effectiveStatusLabel) + '</span></td>' +
+              '</tr>';
+          }).join("");
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      state.apiUrl = resolveInitialApiUrl();
+      document.getElementById("apiUrlInput").value = state.apiUrl;
+
+      document.getElementById("btnToggleSetup").addEventListener("click", () => {
+        document.getElementById("setupBox").classList.toggle("hidden");
+      });
+      document.getElementById("btnSaveApiUrl").addEventListener("click", () => {
+        const val = document.getElementById("apiUrlInput").value.trim();
+        if (!val) return;
+        state.apiUrl = val;
+        localStorage.setItem("qlcv_gas_api_url", val);
+        loadData();
+      });
+      document.getElementById("btnRefresh").addEventListener("click", loadData);
+      document.getElementById("deptSelect").addEventListener("change", (e) => selectDept(e.target.value));
+      document.getElementById("specialistSelect").addEventListener("change", (e) => { state.specialist = e.target.value; loadData(); });
+      document.getElementById("prioritySelect").addEventListener("change", (e) => { state.priority = e.target.value; loadData(); });
+      let t = null;
+      document.getElementById("searchInput").addEventListener("input", (e) => {
+        state.search = e.target.value;
+        clearTimeout(t);
+        t = setTimeout(loadData, 250);
+      });
+      document.querySelectorAll("[data-kpi]").forEach((el) => el.addEventListener("click", () => { state.status = el.dataset.kpi; loadData(); }));
+      document.querySelectorAll("[data-tab]").forEach((el) => el.addEventListener("click", () => { state.status = el.dataset.tab; loadData(); }));
+      document.getElementById("btnExportCsv").addEventListener("click", () => {
+        const items = state.data?.items || [];
+        if (!items.length) return;
+        const c = (v) => '"' + String(v ?? "").replace(/"/g, '""') + '"';
+        const rows = [["Số/Ký hiệu", "Phòng ban", "Trích yếu", "Chuyên viên", "Phụ trách", "Hạn xử lý", "Trạng thái"].map(c).join(",")];
+        items.forEach((it) => rows.push([it.docNumber, it.department, it.title, it.specialistName, it.assigneesText, it.dueDate, it.effectiveStatusLabel].map(c).join(",")));
+        const blob = new Blob(["\uFEFF" + rows.join("\r\n")], { type: "text/csv;charset=utf-8;" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "Dashboard_CongViec.csv";
+        a.click();
+      });
+
+      loadData();
+    });
+  </script>
+</body>
+</html>
