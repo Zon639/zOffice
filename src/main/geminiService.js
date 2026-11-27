@@ -1,11 +1,222 @@
 const fs = require("node:fs");
 const fsp = require("node:fs/promises");
+const os = require("node:os");
 const path = require("node:path");
+const { execFile } = require("node:child_process");
 const https = require("node:https");
+const http = require("node:http");
 const zlib = require("node:zlib");
+const {
+  DEFAULT_ND30_SETTINGS,
+  readAddInSettingsFromAppData,
+} = require("./nd30DocxService");
+
+const SYSTEM_AI_PROVIDER_DEFAULTS = {
+  gemini: {
+    baseUrl: "https://generativelanguage.googleapis.com",
+    model: "gemini-2.5-flash",
+  },
+  openai: {
+    baseUrl: "https://api.openai.com/v1",
+    model: "gpt-4o-mini",
+  },
+  claude: {
+    baseUrl: "https://api.anthropic.com",
+    model: "claude-sonnet-4-20250514",
+  },
+  deepseek: {
+    baseUrl: "https://api.deepseek.com/v1",
+    model: "deepseek-chat",
+  },
+  gateway: {
+    baseUrl: "https://ai.starimg.ru/v1",
+    model: "gemini-3.8-flash",
+  },
+};
+
+function normalizeProviderBaseUrl(provider, rawUrl) {
+  const def = SYSTEM_AI_PROVIDER_DEFAULTS[provider]?.baseUrl || "";
+  let s = String(rawUrl || def).trim().replace(/\/+$/, "");
+  if (provider === "claude") {
+    s = s.replace(/\/v1$/i, "");
+  } else if (
+    (provider === "openai" && /^https:\/\/api\.openai\.com$/i.test(s)) ||
+    (provider === "gateway" && /^https?:\/\/ai\.starimg\.ru$/i.test(s))
+  ) {
+    s = `${s}/v1`;
+  }
+  return s || def;
+}
+
+function postJsonRequest(url, headers = {}, payload = {}, timeoutMs = 90000) {
+  return new Promise((resolve, reject) => {
+    const urlObj = new URL(url);
+    const client = urlObj.protocol === "http:" ? http : https;
+    const bodyBuf = Buffer.from(JSON.stringify(payload), "utf-8");
+
+    const req = client.request(
+      urlObj,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          "Content-Length": String(bodyBuf.byteLength),
+          ...headers,
+        },
+        family: 4,
+        timeout: timeoutMs,
+      },
+      (res) => {
+        const chunks = [];
+        res.on("data", (c) => chunks.push(c));
+        res.on("end", () => {
+          const rawText = Buffer.concat(chunks).toString("utf-8");
+          let parsed = null;
+          try {
+            parsed = JSON.parse(rawText);
+          } catch (_) {
+            return reject(
+              new Error(`Phản hồi từ AI API không hợp lệ (HTTP ${res.statusCode}).`)
+            );
+          }
+          if (res.statusCode < 200 || res.statusCode >= 300) {
+            const apiMsg =
+              parsed?.error?.message ||
+              parsed?.message ||
+              `Lỗi AI API (HTTP ${res.statusCode})`;
+            return reject(new Error(apiMsg));
+          }
+          resolve(parsed);
+        });
+      }
+    );
+
+    req.on("timeout", () => {
+      req.destroy(new Error(`Quá thời gian chờ phản hồi từ AI API (${Math.round(timeoutMs / 1000)}s).`));
+    });
+    req.on("error", (err) => {
+      reject(new Error(`Lỗi kết nối AI API: ${err.message}`));
+    });
+    req.write(bodyBuf);
+    req.end();
+  });
+}
 const {
   normalizeAppsScriptWebAppUrl,
 } = require("./googleSheetService");
+
+/**
+ * Render the first pages of a PDF buffer or file to PNG base64 images on Windows
+ * using built-in WinRT Windows.Data.Pdf.PdfDocument (no external dependencies).
+ */
+async function renderPdfToPngPages(pdfInput, { maxPages = 3, destinationWidth = 1200 } = {}) {
+  if (process.platform !== "win32" || !pdfInput) return [];
+  const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), "zoffice-pdf-"));
+  const outDir = path.join(tmpDir, "pages");
+  await fsp.mkdir(outDir, { recursive: true });
+
+  let pdfPath = "";
+  if (Buffer.isBuffer(pdfInput)) {
+    pdfPath = path.join(tmpDir, "input.pdf");
+    await fsp.writeFile(pdfPath, pdfInput);
+  } else {
+    pdfPath = path.resolve(String(pdfInput));
+    if (!fs.existsSync(pdfPath)) {
+      await fsp.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+      return [];
+    }
+  }
+
+  const psScript = `
+$ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Runtime.WindowsRuntime
+$asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
+  $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation\`1'
+})[0]
+$asTaskAction = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
+  $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncAction'
+})[0]
+function AwaitOp($op, $resultType) {
+  $t = $asTaskGeneric.MakeGenericMethod($resultType).Invoke($null, @($op))
+  $t.Wait()
+  return $t.Result
+}
+function AwaitAct($act) {
+  $t = $asTaskAction.Invoke($null, @($act))
+  $t.Wait()
+}
+$null = [Windows.Data.Pdf.PdfDocument, Windows.Data.Pdf, ContentType=WindowsRuntime]
+$null = [Windows.Data.Pdf.PdfPageRenderOptions, Windows.Data.Pdf, ContentType=WindowsRuntime]
+$null = [Windows.Storage.StorageFile, Windows.Storage, ContentType=WindowsRuntime]
+$null = [Windows.Storage.Streams.InMemoryRandomAccessStream, Windows.Storage.Streams, ContentType=WindowsRuntime]
+
+$file = AwaitOp ([Windows.Storage.StorageFile]::GetFileFromPathAsync($env:ZOFFICE_PDF_PATH)) ([Windows.Storage.StorageFile])
+$pdf = AwaitOp ([Windows.Data.Pdf.PdfDocument]::LoadFromFileAsync($file)) ([Windows.Data.Pdf.PdfDocument])
+$totalPages = [int]$pdf.PageCount
+$limit = [Math]::Min($totalPages, [int]$env:ZOFFICE_PDF_MAX_PAGES)
+for ($i = 0; $i -lt $limit; $i++) {
+  $page = $pdf.GetPage($i)
+  $stream = New-Object Windows.Storage.Streams.InMemoryRandomAccessStream
+  $opts = New-Object Windows.Data.Pdf.PdfPageRenderOptions
+  $opts.DestinationWidth = [uint32]$env:ZOFFICE_PDF_WIDTH
+  AwaitAct ($page.RenderToStreamAsync($stream, $opts))
+  $ms = [System.IO.WindowsRuntimeStreamExtensions]::AsStreamForRead($stream)
+  $bytes = New-Object byte[] $stream.Size
+  $null = $ms.Read($bytes, 0, $bytes.Length)
+  $outFile = Join-Path $env:ZOFFICE_PNG_DIR ("page_" + $i.ToString("D3") + ".png")
+  [System.IO.File]::WriteAllBytes($outFile, $bytes)
+  $page.Dispose()
+  $stream.Dispose()
+}
+Write-Output $totalPages
+`;
+
+  try {
+    const stdout = await new Promise((resolve, reject) => {
+      execFile(
+        "powershell.exe",
+        ["-NoProfile", "-NonInteractive", "-Command", psScript],
+        {
+          timeout: 30000,
+          windowsHide: true,
+          env: {
+            ...process.env,
+            ZOFFICE_PDF_PATH: pdfPath,
+            ZOFFICE_PNG_DIR: outDir,
+            ZOFFICE_PDF_MAX_PAGES: String(Math.max(1, Number(maxPages) || 3)),
+            ZOFFICE_PDF_WIDTH: String(Math.max(400, Number(destinationWidth) || 1200)),
+          },
+        },
+        (err, out, errOut) => {
+          if (err) {
+            return reject(new Error(errOut || err.message));
+          }
+          resolve(String(out || "").trim());
+        }
+      );
+    });
+    const totalPages = parseInt(stdout, 10) || 0;
+    const files = (await fsp.readdir(outDir))
+      .filter((f) => f.endsWith(".png"))
+      .sort();
+    const pages = [];
+    for (let i = 0; i < files.length; i++) {
+      const buf = await fsp.readFile(path.join(outDir, files[i]));
+      pages.push({
+        pageNumber: i + 1,
+        totalPages: totalPages || files.length,
+        mimeType: "image/png",
+        base64: buf.toString("base64"),
+      });
+    }
+    return pages;
+  } catch (err) {
+    console.warn("PDF to PNG render warning:", err?.message || err);
+    return [];
+  } finally {
+    await fsp.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+  }
+}
 
 /**
  * Lightweight pure-Node extractor for .docx (ZIP containing word/document.xml)
@@ -157,6 +368,14 @@ class GeminiService {
   loadSettings() {
     const defaultStorage = this.getDefaultStorageConfig();
     const defaults = {
+      aiProvider: "gemini",
+      aiProviders: {
+        gemini: { ...SYSTEM_AI_PROVIDER_DEFAULTS.gemini, apiKey: process.env.GEMINI_API_KEY || "" },
+        openai: { ...SYSTEM_AI_PROVIDER_DEFAULTS.openai, apiKey: "" },
+        claude: { ...SYSTEM_AI_PROVIDER_DEFAULTS.claude, apiKey: "" },
+        deepseek: { ...SYSTEM_AI_PROVIDER_DEFAULTS.deepseek, apiKey: "" },
+        gateway: { ...SYSTEM_AI_PROVIDER_DEFAULTS.gateway, apiKey: "" },
+      },
       geminiApiKey: process.env.GEMINI_API_KEY || "",
       geminiModel: "gemini-2.5-flash",
       autoAnalyzeOnPick: true,
@@ -177,6 +396,10 @@ class GeminiService {
       googleSheetWebhookUrl: "",
       googleSheetSecret: "",
       autoSyncGoogleSheet: true,
+      nd30Settings: {
+        ...DEFAULT_ND30_SETTINGS,
+        ...(readAddInSettingsFromAppData() || {}),
+      },
       storageConfig: defaultStorage,
     };
     try {
@@ -195,10 +418,49 @@ class GeminiService {
           rootDir: resolvedRoot || defaultStorage.rootDir,
         };
         this.ensureStorageDirectories(mergedStorage);
+        const mergedProviders = {
+          gemini: {
+            ...defaults.aiProviders.gemini,
+            ...(parsed.aiProviders?.gemini || {}),
+            apiKey: String(
+              parsed.aiProviders?.gemini?.apiKey ??
+                parsed.geminiApiKey ??
+                defaults.geminiApiKey
+            ).trim(),
+            model: String(
+              parsed.aiProviders?.gemini?.model ||
+                parsed.geminiModel ||
+                defaults.geminiModel
+            ).trim(),
+          },
+          openai: {
+            ...defaults.aiProviders.openai,
+            ...(parsed.aiProviders?.openai || {}),
+            baseUrl: normalizeProviderBaseUrl("openai", parsed.aiProviders?.openai?.baseUrl),
+          },
+          claude: {
+            ...defaults.aiProviders.claude,
+            ...(parsed.aiProviders?.claude || {}),
+            baseUrl: normalizeProviderBaseUrl("claude", parsed.aiProviders?.claude?.baseUrl),
+          },
+          deepseek: {
+            ...defaults.aiProviders.deepseek,
+            ...(parsed.aiProviders?.deepseek || {}),
+            baseUrl: normalizeProviderBaseUrl("deepseek", parsed.aiProviders?.deepseek?.baseUrl),
+          },
+          gateway: {
+            ...defaults.aiProviders.gateway,
+            ...(parsed.aiProviders?.gateway || {}),
+            baseUrl: normalizeProviderBaseUrl("gateway", parsed.aiProviders?.gateway?.baseUrl),
+          },
+        };
         return {
           ...defaults,
           ...parsed,
-          geminiApiKey: parsed.geminiApiKey || defaults.geminiApiKey,
+          aiProvider: parsed.aiProvider || "gemini",
+          aiProviders: mergedProviders,
+          geminiApiKey: mergedProviders.gemini.apiKey,
+          geminiModel: mergedProviders.gemini.model,
           iofficeUrl:
             parsed.iofficeUrl || parsed.portalHomeUrl || defaults.iofficeUrl,
           iofficeUsername: String(parsed.iofficeUsername || "").trim(),
@@ -224,6 +486,10 @@ class GeminiService {
             parsed.autoSyncGoogleSheet !== undefined
               ? Boolean(parsed.autoSyncGoogleSheet)
               : true,
+          nd30Settings: {
+            ...defaults.nd30Settings,
+            ...(parsed.nd30Settings || {}),
+          },
           storageConfig: mergedStorage,
         };
       }
@@ -246,15 +512,70 @@ class GeminiService {
     };
     this.ensureStorageDirectories(mergedStorage);
 
+    const prevProviders = this.settings.aiProviders || {
+      gemini: { ...SYSTEM_AI_PROVIDER_DEFAULTS.gemini, apiKey: this.settings.geminiApiKey || "" },
+      openai: { ...SYSTEM_AI_PROVIDER_DEFAULTS.openai, apiKey: "" },
+      claude: { ...SYSTEM_AI_PROVIDER_DEFAULTS.claude, apiKey: "" },
+      deepseek: { ...SYSTEM_AI_PROVIDER_DEFAULTS.deepseek, apiKey: "" },
+      gateway: { ...SYSTEM_AI_PROVIDER_DEFAULTS.gateway, apiKey: "" },
+    };
+    const nextProvidersInput = newSettings.aiProviders || {};
+    const nextGeminiKey = String(
+      nextProvidersInput.gemini?.apiKey ??
+        newSettings.geminiApiKey ??
+        prevProviders.gemini?.apiKey ??
+        this.settings.geminiApiKey
+    ).trim();
+    const nextGeminiModel = String(
+      nextProvidersInput.gemini?.model ||
+        newSettings.geminiModel ||
+        prevProviders.gemini?.model ||
+        this.settings.geminiModel ||
+        "gemini-2.5-flash"
+    ).trim();
+
+    const mergedProviders = {
+      gemini: {
+        baseUrl: SYSTEM_AI_PROVIDER_DEFAULTS.gemini.baseUrl,
+        apiKey: nextGeminiKey,
+        model: nextGeminiModel,
+      },
+      openai: {
+        ...SYSTEM_AI_PROVIDER_DEFAULTS.openai,
+        ...(prevProviders.openai || {}),
+        ...(nextProvidersInput.openai || {}),
+      },
+      claude: {
+        ...SYSTEM_AI_PROVIDER_DEFAULTS.claude,
+        ...(prevProviders.claude || {}),
+        ...(nextProvidersInput.claude || {}),
+      },
+      deepseek: {
+        ...SYSTEM_AI_PROVIDER_DEFAULTS.deepseek,
+        ...(prevProviders.deepseek || {}),
+        ...(nextProvidersInput.deepseek || {}),
+      },
+      gateway: {
+        ...SYSTEM_AI_PROVIDER_DEFAULTS.gateway,
+        ...(prevProviders.gateway || {}),
+        ...(nextProvidersInput.gateway || {}),
+      },
+    };
+    for (const pKey of ["openai", "claude", "deepseek", "gateway"]) {
+      mergedProviders[pKey].apiKey = String(mergedProviders[pKey].apiKey || "").trim();
+      mergedProviders[pKey].baseUrl = normalizeProviderBaseUrl(pKey, mergedProviders[pKey].baseUrl);
+      mergedProviders[pKey].model = String(
+        mergedProviders[pKey].model || SYSTEM_AI_PROVIDER_DEFAULTS[pKey].model
+      ).trim();
+    }
+
     this.settings = {
       ...this.settings,
       ...newSettings,
-      geminiApiKey: String(
-        newSettings.geminiApiKey ?? this.settings.geminiApiKey
-      ).trim(),
-      geminiModel: String(
-        newSettings.geminiModel || this.settings.geminiModel || "gemini-2.5-flash"
-      ).trim(),
+      aiProvider: String(newSettings.aiProvider || this.settings.aiProvider || "gemini").trim(),
+      aiProviders: mergedProviders,
+      geminiApiKey: nextGeminiKey,
+      geminiModel: nextGeminiModel,
       autoAnalyzeOnPick:
         newSettings.autoAnalyzeOnPick !== undefined
           ? Boolean(newSettings.autoAnalyzeOnPick)
@@ -310,6 +631,11 @@ class GeminiService {
         newSettings.autoSyncGoogleSheet !== undefined
           ? Boolean(newSettings.autoSyncGoogleSheet)
           : this.settings.autoSyncGoogleSheet !== false,
+      nd30Settings: {
+        ...DEFAULT_ND30_SETTINGS,
+        ...(this.settings.nd30Settings || {}),
+        ...(newSettings.nd30Settings || {}),
+      },
       storageConfig: mergedStorage,
     };
     fs.writeFileSync(
@@ -320,16 +646,38 @@ class GeminiService {
     return this.getPublicSettings();
   }
 
+  getActiveAiConfig() {
+    const prov = String(this.settings.aiProvider || "gemini").trim().toLowerCase();
+    const providers = this.settings.aiProviders || {};
+    const cfg = providers[prov] || {};
+    const def = SYSTEM_AI_PROVIDER_DEFAULTS[prov] || SYSTEM_AI_PROVIDER_DEFAULTS.gemini;
+    const apiKey =
+      prov === "gemini"
+        ? String(cfg.apiKey || this.settings.geminiApiKey || process.env.GEMINI_API_KEY || "").trim()
+        : String(cfg.apiKey || "").trim();
+    return {
+      provider: SYSTEM_AI_PROVIDER_DEFAULTS[prov] ? prov : "gemini",
+      apiKey,
+      baseUrl: normalizeProviderBaseUrl(prov, cfg.baseUrl || def.baseUrl),
+      model: String(cfg.model || (prov === "gemini" ? this.settings.geminiModel : "") || def.model).trim(),
+    };
+  }
+
   getPublicSettings() {
+    const activeAi = this.getActiveAiConfig();
     const key = this.settings.geminiApiKey || "";
     const ioUser = String(this.settings.iofficeUsername || "").trim();
     const ioPass = String(this.settings.iofficePassword || "");
     const defaultStorage = this.getDefaultStorageConfig();
+    const activeKey = activeAi.apiKey || "";
     return {
-      hasApiKey: Boolean(key),
-      maskedApiKey: key
-        ? key.length > 10
-          ? `${key.slice(0, 6)}...${key.slice(-4)}`
+      aiProvider: activeAi.provider,
+      activeAiModel: activeAi.model,
+      aiProviders: this.settings.aiProviders || {},
+      hasApiKey: Boolean(activeKey || key),
+      maskedApiKey: activeKey
+        ? activeKey.length > 10
+          ? `${activeKey.slice(0, 6)}...${activeKey.slice(-4)}`
           : "********"
         : "",
       geminiApiKey: key,
@@ -360,16 +708,176 @@ class GeminiService {
       ),
       googleSheetSecret: String(this.settings.googleSheetSecret || "").trim(),
       autoSyncGoogleSheet: this.settings.autoSyncGoogleSheet !== false,
+      nd30Settings: {
+        ...DEFAULT_ND30_SETTINGS,
+        ...(this.settings.nd30Settings || {}),
+      },
       storageConfig: this.settings.storageConfig || defaultStorage,
       defaultStorageConfig: defaultStorage,
     };
   }
 
-  async analyzeDocumentFile(filePath) {
-    const apiKey = (this.settings.geminiApiKey || process.env.GEMINI_API_KEY || "").trim();
-    if (!apiKey) {
+  async callActiveAiForJson({ parts = [], responseSchema = null, temperature = 0.1 } = {}) {
+    const cfg = this.getActiveAiConfig();
+    const providerLabels = {
+      gemini: "Google Gemini",
+      openai: "ChatGPT / OpenAI",
+      claude: "Anthropic Claude",
+      deepseek: "DeepSeek",
+      gateway: "AI Gateway / Proxy",
+    };
+    const label = providerLabels[cfg.provider] || cfg.provider;
+    if (!cfg.apiKey) {
       throw new Error(
-        "Chưa cấu hình Gemini API Key! Vui lòng bấm nút '✨ Cài đặt AI Gemini' để nhập API Key."
+        `Chưa cấu hình API Key cho ${label}! Vui lòng bấm nút '⚙️' Cài đặt hệ thống để nhập API Key.`
+      );
+    }
+
+    if (cfg.provider === "gemini") {
+      const payload = {
+        contents: [{ role: "user", parts }],
+        generationConfig: {
+          temperature,
+          responseMimeType: "application/json",
+          ...(responseSchema ? { responseSchema } : {}),
+        },
+      };
+      const resData = await callGeminiRestApi(cfg.apiKey, cfg.model, payload);
+      return resData?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    }
+
+    if (cfg.provider === "claude") {
+      const blocks = [];
+      for (const p of parts) {
+        if (p?.inlineData?.data) {
+          if (p.inlineData.mimeType === "application/pdf") {
+            blocks.push({
+              type: "document",
+              source: { type: "base64", media_type: "application/pdf", data: p.inlineData.data },
+            });
+          } else {
+            blocks.push({
+              type: "image",
+              source: { type: "base64", media_type: p.inlineData.mimeType || "image/png", data: p.inlineData.data },
+            });
+          }
+        } else if (p?.text) {
+          blocks.push({ type: "text", text: p.text });
+        }
+      }
+      blocks.push({
+        type: "text",
+        text: "YÊU CẦU ĐỊNH DẠNG: Chỉ trả về duy nhất 1 đối tượng JSON hợp lệ (không bọc trong markdown code fence, không giải thích thêm).",
+      });
+
+      const resData = await postJsonRequest(
+        `${cfg.baseUrl}/v1/messages`,
+        {
+          "x-api-key": cfg.apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        {
+          model: cfg.model,
+          max_tokens: 4096,
+          temperature: Math.min(1, temperature),
+          messages: [{ role: "user", content: blocks }],
+        }
+      );
+      const textParts = (resData?.content || [])
+        .filter((c) => c?.type === "text" && typeof c.text === "string")
+        .map((c) => c.text);
+      return textParts.join("\n").trim();
+    }
+
+    // OpenAI / DeepSeek / Gateway (OpenAI-compatible)
+    const contentParts = [];
+    let hasPdfWithoutText = false;
+    let hasTextOrImage = false;
+    const supportsVision = cfg.provider === "openai" || cfg.provider === "gateway";
+    for (const p of parts) {
+      if (p?.inlineData?.data) {
+        const mime = p.inlineData.mimeType || "";
+        if (mime.startsWith("image/") && supportsVision) {
+          contentParts.push({
+            type: "image_url",
+            image_url: { url: `data:${mime};base64,${p.inlineData.data}` },
+          });
+          hasTextOrImage = true;
+        } else if (mime === "application/pdf") {
+          if (supportsVision) {
+            const pdfPages = await renderPdfToPngPages(
+              Buffer.from(p.inlineData.data, "base64"),
+              { maxPages: 3, destinationWidth: 1200 }
+            );
+            if (pdfPages.length > 0) {
+              for (const pg of pdfPages) {
+                contentParts.push({
+                  type: "text",
+                  text: `[Hình ảnh Trang ${pg.pageNumber}/${pg.totalPages} của tệp PDF đính kèm]`,
+                });
+                contentParts.push({
+                  type: "image_url",
+                  image_url: { url: `data:image/png;base64,${pg.base64}` },
+                });
+              }
+              hasTextOrImage = true;
+            } else {
+              hasPdfWithoutText = true;
+            }
+          } else {
+            hasPdfWithoutText = true;
+          }
+        }
+      } else if (p?.text) {
+        contentParts.push({ type: "text", text: p.text });
+        hasTextOrImage = true;
+      }
+    }
+
+    if (hasPdfWithoutText && contentParts.filter((c) => c.type === "text").length <= 1) {
+      throw new Error(
+        `${label} không hỗ trợ đọc tệp PDF nhị phân trực tiếp như Gemini hoặc Claude. Hãy chọn tệp Word (.docx)/.txt, hoặc chuyển Nhà cung cấp AI chính sang Gemini / Claude để đọc PDF trực tiếp.`
+      );
+    }
+
+    if (!hasTextOrImage) {
+      throw new Error(`Không có nội dung văn bản hợp lệ để gửi tới ${label}.`);
+    }
+
+    const messageContent =
+      contentParts.every((c) => c.type === "text")
+        ? contentParts.map((c) => c.text).join("\n\n")
+        : contentParts;
+
+    const reqBody = {
+      model: cfg.model,
+      temperature,
+      messages: [
+        {
+          role: "system",
+          content:
+            "Bạn là trợ lý AI trích xuất dữ liệu văn bản hành chính Việt Nam. Luôn trả về duy nhất 1 đối tượng JSON hợp lệ đúng các trường được yêu cầu (không bọc markdown code fence).",
+        },
+        { role: "user", content: messageContent },
+      ],
+    };
+    if (cfg.provider !== "gateway") {
+      reqBody.response_format = { type: "json_object" };
+    }
+
+    const resData = await postJsonRequest(
+      `${cfg.baseUrl}/chat/completions`,
+      { Authorization: `Bearer ${cfg.apiKey}` },
+      reqBody
+    );
+    return resData?.choices?.[0]?.message?.content || "";
+  }
+
+  async analyzeDocumentFile(filePath) {
+    const activeCfg = this.getActiveAiConfig();
+    if (!activeCfg.apiKey) {
+      throw new Error(
+        "Chưa cấu hình API Key AI! Vui lòng bấm nút '⚙️' để chọn nhà cung cấp AI và nhập API Key."
       );
     }
 
@@ -445,54 +953,37 @@ Chi tiết các trường JSON cần trích xuất:
 
     parts.push({ text: systemPrompt });
 
-    const payload = {
-      contents: [
-        {
-          role: "user",
-          parts,
-        },
-      ],
-      generationConfig: {
-        temperature: 0.1,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: "OBJECT",
-          properties: {
-            docNumber: { type: "STRING" },
-            issuer: { type: "STRING" },
-            title: { type: "STRING" },
-            receivedDate: { type: "STRING" },
-            dueDate: { type: "STRING" },
-            priority: {
-              type: "STRING",
-              enum: ["normal", "important", "urgent"],
-            },
-            notes: { type: "STRING" },
-            suggestedAssigneeHint: { type: "STRING" },
+    const textOutput = await this.callActiveAiForJson({
+      parts,
+      temperature: 0.1,
+      responseSchema: {
+        type: "OBJECT",
+        properties: {
+          docNumber: { type: "STRING" },
+          issuer: { type: "STRING" },
+          title: { type: "STRING" },
+          receivedDate: { type: "STRING" },
+          dueDate: { type: "STRING" },
+          priority: {
+            type: "STRING",
+            enum: ["normal", "important", "urgent"],
           },
-          required: [
-            "docNumber",
-            "issuer",
-            "title",
-            "receivedDate",
-            "dueDate",
-            "priority",
-            "notes",
-          ],
+          notes: { type: "STRING" },
+          suggestedAssigneeHint: { type: "STRING" },
         },
+        required: [
+          "docNumber",
+          "issuer",
+          "title",
+          "receivedDate",
+          "dueDate",
+          "priority",
+          "notes",
+        ],
       },
-    };
-
-    const resData = await callGeminiRestApi(
-      apiKey,
-      this.settings.geminiModel || "gemini-2.5-flash",
-      payload
-    );
-
-    const textOutput =
-      resData?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    });
     if (!textOutput) {
-      throw new Error("Gemini API không trả về dữ liệu trích xuất.");
+      throw new Error("AI API không trả về dữ liệu trích xuất.");
     }
 
     let extracted = null;
@@ -527,14 +1018,10 @@ Chi tiết các trường JSON cần trích xuất:
     fileMime = "",
     fileName = "",
   }) {
-    const apiKey = (
-      this.settings.geminiApiKey ||
-      process.env.GEMINI_API_KEY ||
-      ""
-    ).trim();
-    if (!apiKey) {
+    const activeCfg = this.getActiveAiConfig();
+    if (!activeCfg.apiKey) {
       throw new Error(
-        "Chưa cấu hình Gemini API Key! Vui lòng bấm nút '⚙️ Cài đặt AI Gemini' trên thanh công cụ để nhập API Key."
+        "Chưa cấu hình API Key AI! Vui lòng bấm nút '⚙️' trên thanh công cụ để nhập API Key."
       );
     }
 
@@ -605,54 +1092,37 @@ Chi tiết các trường JSON cần trích xuất:
 
     parts.push({ text: systemPrompt });
 
-    const payload = {
-      contents: [
-        {
-          role: "user",
-          parts,
-        },
-      ],
-      generationConfig: {
-        temperature: 0.1,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: "OBJECT",
-          properties: {
-            docNumber: { type: "STRING" },
-            issuer: { type: "STRING" },
-            title: { type: "STRING" },
-            receivedDate: { type: "STRING" },
-            dueDate: { type: "STRING" },
-            priority: {
-              type: "STRING",
-              enum: ["normal", "important", "urgent"],
-            },
-            notes: { type: "STRING" },
-            suggestedAssigneeHint: { type: "STRING" },
+    const textOutput = await this.callActiveAiForJson({
+      parts,
+      temperature: 0.1,
+      responseSchema: {
+        type: "OBJECT",
+        properties: {
+          docNumber: { type: "STRING" },
+          issuer: { type: "STRING" },
+          title: { type: "STRING" },
+          receivedDate: { type: "STRING" },
+          dueDate: { type: "STRING" },
+          priority: {
+            type: "STRING",
+            enum: ["normal", "important", "urgent"],
           },
-          required: [
-            "docNumber",
-            "issuer",
-            "title",
-            "receivedDate",
-            "dueDate",
-            "priority",
-            "notes",
-          ],
+          notes: { type: "STRING" },
+          suggestedAssigneeHint: { type: "STRING" },
         },
+        required: [
+          "docNumber",
+          "issuer",
+          "title",
+          "receivedDate",
+          "dueDate",
+          "priority",
+          "notes",
+        ],
       },
-    };
-
-    const resData = await callGeminiRestApi(
-      apiKey,
-      this.settings.geminiModel || "gemini-2.5-flash",
-      payload
-    );
-
-    const textOutput =
-      resData?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    });
     if (!textOutput) {
-      throw new Error("Gemini API không trả về dữ liệu trích xuất từ trang web.");
+      throw new Error("AI API không trả về dữ liệu trích xuất từ trang web.");
     }
 
     let extracted = null;
@@ -694,14 +1164,10 @@ Chi tiết các trường JSON cần trích xuất:
     fileName = "",
     activeDocs = [],
   }) {
-    const apiKey = (
-      this.settings.geminiApiKey ||
-      process.env.GEMINI_API_KEY ||
-      ""
-    ).trim();
-    if (!apiKey) {
+    const activeCfg = this.getActiveAiConfig();
+    if (!activeCfg.apiKey) {
       throw new Error(
-        "Chưa cấu hình Gemini API Key! Vui lòng bấm nút '⚙️ Cài đặt AI Gemini' trên thanh công cụ để nhập API Key."
+        "Chưa cấu hình API Key AI! Vui lòng bấm nút '⚙️' trên thanh công cụ để nhập API Key."
       );
     }
 
@@ -824,56 +1290,39 @@ Hãy đọc kỹ văn bản phản hồi của chuyên viên và trả về JSON
 
     parts.push({ text: systemPrompt });
 
-    const payload = {
-      contents: [
-        {
-          role: "user",
-          parts,
-        },
-      ],
-      generationConfig: {
-        temperature: 0.1,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: "OBJECT",
-          properties: {
-            responseDocNumber: { type: "STRING" },
-            responseTitle: { type: "STRING" },
-            referencedSuperiorDocNumbers: {
-              type: "ARRAY",
-              items: { type: "STRING" },
-            },
-            basisExcerpt: { type: "STRING" },
-            matchedTaskId: { type: "STRING" },
-            matchConfidence: {
-              type: "STRING",
-              enum: ["exact", "partial", "none"],
-            },
-            completionNote: { type: "STRING" },
+    const textOutput = await this.callActiveAiForJson({
+      parts,
+      temperature: 0.1,
+      responseSchema: {
+        type: "OBJECT",
+        properties: {
+          responseDocNumber: { type: "STRING" },
+          responseTitle: { type: "STRING" },
+          referencedSuperiorDocNumbers: {
+            type: "ARRAY",
+            items: { type: "STRING" },
           },
-          required: [
-            "responseDocNumber",
-            "responseTitle",
-            "referencedSuperiorDocNumbers",
-            "basisExcerpt",
-            "matchedTaskId",
-            "matchConfidence",
-            "completionNote",
-          ],
+          basisExcerpt: { type: "STRING" },
+          matchedTaskId: { type: "STRING" },
+          matchConfidence: {
+            type: "STRING",
+            enum: ["exact", "partial", "none"],
+          },
+          completionNote: { type: "STRING" },
         },
+        required: [
+          "responseDocNumber",
+          "responseTitle",
+          "referencedSuperiorDocNumbers",
+          "basisExcerpt",
+          "matchedTaskId",
+          "matchConfidence",
+          "completionNote",
+        ],
       },
-    };
-
-    const resData = await callGeminiRestApi(
-      apiKey,
-      this.settings.geminiModel || "gemini-2.5-flash",
-      payload
-    );
-
-    const textOutput =
-      resData?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    });
     if (!textOutput) {
-      throw new Error("Gemini API không trả về kết quả đối chiếu văn bản phản hồi.");
+      throw new Error("AI API không trả về kết quả đối chiếu văn bản phản hồi.");
     }
 
     let extracted = null;
@@ -952,4 +1401,9 @@ Hãy đọc kỹ văn bản phản hồi của chuyên viên và trả về JSON
   }
 }
 
-module.exports = { GeminiService, extractTextFromDocxBuffer };
+module.exports = {
+  GeminiService,
+  extractTextFromDocxBuffer,
+  callGeminiRestApi,
+  renderPdfToPngPages,
+};

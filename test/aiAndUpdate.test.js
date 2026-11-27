@@ -69,6 +69,17 @@ test("parseProviderModelsResponse parses DeepSeek, Claude, and Ollama model payl
     }),
     ["qwen2.5:7b", "llama3.2:latest"]
   );
+
+  assert.deepEqual(
+    parseProviderModelsResponse(
+      "gateway",
+      {
+        data: [{ id: "gemini-3.1-pro" }, { id: "gemini-3.8-flash" }],
+      },
+      "https://ai.starimg.ru/v1"
+    ),
+    ["gemini-3.1-pro", "gemini-3.8-flash"]
+  );
 });
 
 test("normalizeGithubRepo extracts owner/repo from URLs and shorthand", () => {
@@ -119,4 +130,133 @@ test("pickReleaseAsset selects exe when packaged and zip/zipball when running fr
     assets: [],
   };
   assert.equal(pickReleaseAsset(tagOnlyRelease, false).url, tagOnlyRelease.zipball_url);
+});
+
+test("GeminiService persists multi-provider aiProviders and normalizes Base URLs", () => {
+  const fs = require("node:fs");
+  const os = require("node:os");
+  const path = require("node:path");
+  const { GeminiService } = require("../src/main/geminiService");
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "zoffice-gem-"));
+  try {
+    const svc = new GeminiService(tmpDir);
+    svc.saveSettings({
+      aiProvider: "claude",
+      aiProviders: {
+        claude: {
+          apiKey: "sk-ant-test",
+          baseUrl: "https://api.anthropic.com/v1/",
+          model: "claude-sonnet-4-20250514",
+        },
+        openai: {
+          apiKey: "sk-openai-test",
+          baseUrl: "https://api.openai.com",
+          model: "gpt-4o",
+        },
+        deepseek: {
+          apiKey: "sk-ds-test",
+          baseUrl: "https://api.deepseek.com/v1/",
+          model: "deepseek-chat",
+        },
+        gateway: {
+          apiKey: "sk-ant-gw-test",
+          baseUrl: "https://ai.starimg.ru",
+          model: "gemini-3.8-flash",
+        },
+      },
+    });
+    const claudeCfg = svc.getActiveAiConfig();
+    assert.equal(claudeCfg.provider, "claude");
+    assert.equal(claudeCfg.baseUrl, "https://api.anthropic.com");
+    assert.equal(claudeCfg.apiKey, "sk-ant-test");
+
+    svc.saveSettings({ aiProvider: "openai" });
+    const openaiCfg = svc.getActiveAiConfig();
+    assert.equal(openaiCfg.baseUrl, "https://api.openai.com/v1");
+    assert.equal(openaiCfg.model, "gpt-4o");
+
+    svc.saveSettings({ aiProvider: "gateway" });
+    const gwCfg = svc.getActiveAiConfig();
+    assert.equal(gwCfg.provider, "gateway");
+    assert.equal(gwCfg.baseUrl, "https://ai.starimg.ru/v1");
+    assert.equal(gwCfg.apiKey, "sk-ant-gw-test");
+    assert.equal(gwCfg.model, "gemini-3.8-flash");
+    const pubGw = svc.getPublicSettings();
+    assert.equal(pubGw.aiProvider, "gateway");
+    assert.equal(pubGw.activeAiModel, "gemini-3.8-flash");
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test("AiChatService syncs gateway provider settings with GeminiService", () => {
+  const fs = require("node:fs");
+  const os = require("node:os");
+  const path = require("node:path");
+  const { GeminiService } = require("../src/main/geminiService");
+  const { AiChatService } = require("../src/main/aiChatService");
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "zoffice-chat-"));
+  try {
+    const gemSvc = new GeminiService(tmpDir);
+    const chatSvc = new AiChatService(tmpDir, gemSvc);
+
+    const pub = chatSvc.saveSettings({
+      defaultProvider: "gateway",
+      gateway: {
+        apiKey: "sk-ant-gw-sync",
+        baseUrl: "https://ai.starimg.ru/",
+        model: "gemini-3.1-pro",
+      },
+    });
+    assert.equal(pub.defaultProvider, "gateway");
+    assert.equal(pub.gateway.baseUrl, "https://ai.starimg.ru/v1");
+    assert.equal(pub.gateway.apiKey, "sk-ant-gw-sync");
+    assert.equal(pub.gateway.model, "gemini-3.1-pro");
+    assert.equal(gemSvc.settings.aiProviders.gateway.apiKey, "sk-ant-gw-sync");
+    assert.equal(gemSvc.settings.aiProviders.gateway.baseUrl, "https://ai.starimg.ru/v1");
+    assert.equal(gemSvc.settings.aiProviders.gateway.model, "gemini-3.1-pro");
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test("renderPdfToPngPages renders minimal PDF buffer into PNG page(s) on Windows", async () => {
+  if (process.platform !== "win32") return;
+  const { renderPdfToPngPages } = require("../src/main/geminiService");
+  const minimalPdf = Buffer.from(
+    "%PDF-1.4\n" +
+      "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n" +
+      "2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n" +
+      "3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 4 0 R /Resources << >> >> endobj\n" +
+      "4 0 obj << /Length 22 >> stream\n0 0 0 rg 10 10 50 50 re f\nendstream endobj\n" +
+      "xref\n0 5\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \n0000000210 00000 n \n" +
+      "trailer << /Size 5 /Root 1 0 R >>\nstartxref\n282\n%%EOF\n",
+    "ascii"
+  );
+  const pages = await renderPdfToPngPages(minimalPdf, { maxPages: 2, destinationWidth: 400 });
+  assert.equal(pages.length, 1);
+  assert.equal(pages[0].pageNumber, 1);
+  assert.equal(pages[0].mimeType, "image/png");
+  const pngHeader = Buffer.from(pages[0].base64, "base64").subarray(0, 8);
+  assert.deepEqual([...pngHeader], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+});
+
+test("UpdateService enables autoCheckUpdates and autoInstallUpdates by default", () => {
+  const fs = require("node:fs");
+  const os = require("node:os");
+  const path = require("node:path");
+  const { UpdateService } = require("../src/main/updateService");
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "zoffice-upd-"));
+  try {
+    const svc = new UpdateService(null, process.cwd(), tmpDir);
+    const st = svc.getState();
+    assert.equal(st.autoCheckUpdates, true);
+    assert.equal(st.autoInstallUpdates, true);
+    assert.equal(st.githubRepo, "Zon639/zOffice");
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
 });

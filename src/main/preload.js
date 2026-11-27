@@ -8,6 +8,10 @@ contextBridge.exposeInMainWorld("appApi", {
   updateDocumentStatus: (payload) => ipcRenderer.invoke("docs:update-status", payload),
   completeDocumentWithResponse: (payload) =>
     ipcRenderer.invoke("docs:complete-with-response", payload),
+  generateNd30AssignmentDoc: (payload) =>
+    ipcRenderer.invoke("nd30:generate-for-doc", payload),
+  importNd30AddInSettings: () =>
+    ipcRenderer.invoke("nd30:import-addin-settings"),
 
   // Files & Storage Configuration
   pickFiles: () => ipcRenderer.invoke("files:pick"),

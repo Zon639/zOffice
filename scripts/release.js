@@ -49,6 +49,8 @@ async function buildCleanZip(version) {
     "package.json",
     "package-lock.json",
     "README.md",
+    "z.ico",
+    "z.png",
     "src",
     "apps-script",
     "scripts",

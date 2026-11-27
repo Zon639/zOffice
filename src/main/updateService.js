@@ -223,10 +223,14 @@ async function copyAppCodeSubset(srcRoot, destRoot) {
   const entriesToBackup = [
     "src",
     "apps-script",
+    "scripts",
+    "test",
     "package.json",
     "package-lock.json",
     "KhoiDongApp.bat",
     "README.md",
+    "z.ico",
+    "z.png",
   ];
   await fsp.mkdir(destRoot, { recursive: true });
   for (const name of entriesToBackup) {
@@ -268,6 +272,7 @@ class UpdateService {
     this.config = this.loadConfig();
     this.lastCheckResult = null;
     this.isBusy = false;
+    this.attemptedAutoTags = new Set();
   }
 
   getCurrentVersion() {
@@ -306,6 +311,7 @@ class UpdateService {
       githubRepo: this.getDefaultGithubRepo(),
       githubToken: "",
       autoCheckUpdates: true,
+      autoInstallUpdates: true,
       includePrerelease: false,
       lastCheckedAt: "",
       history: [],
@@ -323,6 +329,10 @@ class UpdateService {
           autoCheckUpdates:
             parsed.autoCheckUpdates !== undefined
               ? Boolean(parsed.autoCheckUpdates)
+              : true,
+          autoInstallUpdates:
+            parsed.autoInstallUpdates !== undefined
+              ? Boolean(parsed.autoInstallUpdates)
               : true,
           includePrerelease: Boolean(parsed.includePrerelease),
           history: Array.isArray(parsed.history) ? parsed.history : [],
@@ -349,6 +359,10 @@ class UpdateService {
         patch.autoCheckUpdates !== undefined
           ? Boolean(patch.autoCheckUpdates)
           : this.config.autoCheckUpdates,
+      autoInstallUpdates:
+        patch.autoInstallUpdates !== undefined
+          ? Boolean(patch.autoInstallUpdates)
+          : this.config.autoInstallUpdates,
       includePrerelease:
         patch.includePrerelease !== undefined
           ? Boolean(patch.includePrerelease)
@@ -402,6 +416,7 @@ class UpdateService {
       hasGithubToken: Boolean(this.config.githubToken),
       githubToken: this.config.githubToken,
       autoCheckUpdates: this.config.autoCheckUpdates,
+      autoInstallUpdates: this.config.autoInstallUpdates !== false,
       includePrerelease: this.config.includePrerelease,
       lastCheckedAt: this.config.lastCheckedAt,
       history: this.config.history || [],
@@ -411,7 +426,7 @@ class UpdateService {
     };
   }
 
-  async checkForUpdates({ silent = false } = {}) {
+  async checkForUpdates({ silent = false, autoInstallIfNew = false } = {}) {
     const repo = normalizeGithubRepo(this.config.githubRepo);
     if (!repo || !repo.includes("/")) {
       if (silent) {
@@ -484,6 +499,32 @@ class UpdateService {
         ? `Có phiên bản mới v${latest.version} (hiện tại v${currentVersion})`
         : `Bạn đang dùng phiên bản mới nhất (v${currentVersion})`,
     });
+
+    if (
+      hasUpdate &&
+      autoInstallIfNew &&
+      !this.isBusy &&
+      latest?.tagName &&
+      !this.attemptedAutoTags.has(latest.tagName)
+    ) {
+      this.attemptedAutoTags.add(latest.tagName);
+      this.emitStatus({
+        phase: "auto-updating",
+        hasUpdate: true,
+        currentVersion,
+        latestVersion: latest.version,
+        latestRelease: latest,
+        percent: 5,
+        message: `Phát hiện bản mới v${latest.version} — đang tự động tải và cài đặt...`,
+      });
+      const installRes = await this.downloadAndInstallUpdate(latest.tagName);
+      return {
+        ...this.lastCheckResult,
+        autoUpdateStarted: true,
+        installRes,
+        state: this.getState(),
+      };
+    }
 
     return {
       ...this.lastCheckResult,

@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>zOffice - Quản Lý Công Việc & Văn Bản</title>
+  <link rel="icon" type="image/png" href="../../z.png" />
+  <link rel="shortcut icon" type="image/x-icon" href="../../z.ico" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -12,24 +14,9 @@
     <header class="top-header">
       <div class="brand-area">
         <div class="brand-logo">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-            <polyline points="14 2 14 8 20 8"></polyline>
-            <line x1="16" y1="13" x2="8" y2="13"></line>
-            <line x1="16" y1="17" x2="8" y2="17"></line>
-            <polyline points="10 9 9 9 8 9"></polyline>
-          </svg>
+          <img src="../../z.png" alt="zOffice" class="brand-logo-img" />
         </div>
         <h1 class="brand-title">zOffice</h1>
-        <button
-          type="button"
-          class="version-pill-btn"
-          id="btnOpenUpdateModal"
-          title="Quản lý phiên bản & Kiểm tra cập nhật qua GitHub"
-        >
-          <span id="appVersionText">v1.0.0</span>
-          <span id="appUpdateDot" class="update-dot hidden"></span>
-        </button>
 
         <!-- Chuyển chế độ hiển thị: Công việc / Cổng Web / Chat với AI -->
         <div class="view-mode-switcher" id="viewModeSwitcher">
@@ -145,38 +132,11 @@
 
             <button
               type="button"
-              class="btn btn-secondary btn-xs"
-              id="btnOpenIofficeLoginModal"
-              title="Lưu Tài khoản & Mật khẩu đăng nhập iOffice để tự động điền và đăng nhập"
-            >
-              🔐 <span id="iofficeSavedStatusText">Lưu TK iOffice</span>
-            </button>
-
-            <button
-              type="button"
               class="btn btn-ghost btn-xs"
               id="btnFillIofficeLoginNow"
               title="Tự động điền Tài khoản & Mật khẩu đã lưu và bấm Đăng nhập ngay trên trang iOffice hiện tại"
             >
               🔑 Đăng nhập ngay
-            </button>
-
-            <button
-              type="button"
-              class="btn btn-ai btn-sm"
-              id="btnPullWebPageToApp"
-              title="Tự động lưu file văn bản đang mở trên trang web vào nhiệm vụ & dùng AI Gemini đọc điền thông tin"
-            >
-              📥 Kéo Văn Bản Mới Về App
-            </button>
-
-            <button
-              type="button"
-              class="btn btn-complete-action btn-sm"
-              id="btnPullWebCompletionToApp"
-              title="Đọc văn bản phản hồi của chuyên viên đang mở trên trang web, tìm phần Căn cứ văn bản cấp trên, tự động khớp số ký hiệu & đánh dấu Đã xử lý"
-            >
-              ✅ Kéo VB Phản Hồi & Đánh Dấu Hoàn Thành
             </button>
           </div>
 
@@ -262,6 +222,7 @@
                   <option value="openai">🤖 ChatGPT / OpenAI</option>
                   <option value="claude">🧠 Claude</option>
                   <option value="deepseek">🐋 DeepSeek</option>
+                  <option value="gateway">🌐 AI Gateway (AI STAR)</option>
                   <option value="ollama">🦙 Ollama (Local)</option>
                 </select>
                 <select
@@ -764,12 +725,31 @@
           <div class="form-row-3">
             <div class="form-group">
               <label for="docReceivedDateInput">Ngày nhận văn bản</label>
-              <input type="date" id="docReceivedDateInput" />
+              <div class="vn-date-input-wrap">
+                <input
+                  type="text"
+                  id="docReceivedDateInput"
+                  placeholder="dd/mm/yyyy"
+                  autocomplete="off"
+                />
+                <input type="date" id="docReceivedDatePicker" class="vn-native-picker-input" tabindex="-1" />
+                <button type="button" class="vn-picker-btn" data-picker-target="docReceivedDatePicker" title="Chọn ngày từ lịch">📅</button>
+              </div>
             </div>
 
             <div class="form-group">
               <label for="docDueDateInput">Hạn xử lý (Deadline) <span class="req">*</span></label>
-              <input type="datetime-local" id="docDueDateInput" required />
+              <div class="vn-date-input-wrap">
+                <input
+                  type="text"
+                  id="docDueDateInput"
+                  placeholder="dd/mm/yyyy HH:mm"
+                  autocomplete="off"
+                  required
+                />
+                <input type="datetime-local" id="docDueDatePicker" class="vn-native-picker-input" tabindex="-1" />
+                <button type="button" class="vn-picker-btn" data-picker-target="docDueDatePicker" title="Chọn ngày giờ từ lịch">📅</button>
+              </div>
             </div>
 
             <div class="form-group">
@@ -919,17 +899,23 @@
             </button>
           </div>
 
-          <!-- Tùy chọn tự động gửi Zalo ngay khi lưu -->
+          <!-- Tùy chọn tự động tạo Công văn NĐ 30/2020 & gửi Zalo ngay khi lưu -->
           <div class="auto-zalo-box">
+            <label class="checkbox-row" style="margin-bottom: 6px;">
+              <input type="checkbox" id="chkAutoGenerateNd30" checked />
+              <span class="checkbox-title">
+                📜 Tự động tạo Công văn Giao việc chuẩn Nghị định 30/2020/NĐ-CP (.docx) &amp; đính kèm vào nhiệm vụ
+              </span>
+            </label>
             <label class="checkbox-row">
-              <input type="checkbox" id="chkAutoSendZalo" checked />
+              <input type="checkbox" id="chkAutoSendZalo" />
               <span class="checkbox-title">
                 💬 Tự động gửi tin nhắn Zalo thông báo cho người phụ trách ngay khi lưu
               </span>
             </label>
             <label class="checkbox-row sub-checkbox">
-              <input type="checkbox" id="chkAutoSendAttachments" checked />
-              <span>📎 Đính kèm luôn tệp văn bản trong tin nhắn Zalo</span>
+              <input type="checkbox" id="chkAutoSendAttachments" />
+              <span>📎 Đính kèm luôn tệp văn bản (gồm cả Công văn NĐ 30 vừa tạo) trong tin nhắn Zalo</span>
             </label>
           </div>
         </div>
@@ -1225,23 +1211,44 @@
   </div>
 
   <!-- ========================================================================= -->
-  <!-- MODAL 5: CÀI ĐẶT HỆ THỐNG (TÀI KHOẢN iOFFICE & GEMINI AI)                  -->
+  <!-- MODAL 5: CÀI ĐẶT HỆ THỐNG (CHIA TAB GỌN GÀNG)                             -->
   <!-- ========================================================================= -->
   <div class="modal-backdrop hidden" id="geminiSettingsModal">
     <div class="modal-container modal-lg">
       <div class="modal-header ai-modal-header">
         <div>
-          <h2>⚙️ Cài Đặt Hệ Thống (Lưu File, iOffice & AI Gemini)</h2>
-          <p class="modal-subtitle">Cấu hình nơi lưu trữ văn bản, tài khoản đăng nhập iOffice & AI đọc văn bản</p>
+          <h2>⚙️ Cài Đặt Hệ Thống zOffice</h2>
+          <p class="modal-subtitle">Quản lý AI, Cổng iOffice, Lưu trữ văn bản, Google Sheet, Nghị định 30/2020 &amp; Cập nhật phiên bản</p>
         </div>
         <button class="modal-close" data-close-modal="geminiSettingsModal">✕</button>
       </div>
 
+      <div class="settings-tabs-bar" id="systemSettingsTabsBar">
+        <button type="button" class="settings-tab-btn active" data-settings-tab="ai">
+          ✨ AI Hệ Thống
+        </button>
+        <button type="button" class="settings-tab-btn" data-settings-tab="portal_storage">
+          🔐 Cổng Web &amp; Lưu Trữ
+        </button>
+        <button type="button" class="settings-tab-btn" data-settings-tab="gsheet">
+          📊 Google Sheet
+        </button>
+        <button type="button" class="settings-tab-btn" data-settings-tab="nd30">
+          📜 Nghị Định 30/2020
+        </button>
+        <button type="button" class="settings-tab-btn" data-settings-tab="updates">
+          <span>🔄 Phiên Bản &amp; Cập Nhật</span>
+          <span id="settingsUpdateTabDot" class="update-dot hidden"></span>
+        </button>
+      </div>
+
       <form id="geminiSettingsForm" class="modal-body">
+        <!-- TAB 1: CỔNG WEB & LƯU TRỮ -->
+        <div class="settings-tab-panel hidden" data-settings-panel="portal_storage">
         <!-- PHẦN 1: LƯU THÔNG TIN ĐĂNG NHẬP iOFFICE / CỔNG VĂN BẢN -->
         <div class="completion-details-card" id="iofficeSettingsSection">
           <div class="section-heading">
-            <span>🔐 1. Lưu Thông Tin Đăng Nhập iOffice / Cổng Văn Bản Web</span>
+            <span>🔐 Lưu Thông Tin Đăng Nhập iOffice / Cổng Văn Bản Web</span>
             <button type="button" class="btn btn-zalo btn-xs" id="btnSaveAndLoginIofficeNow">
               🔑 Lưu & Đăng Nhập iOffice Ngay
             </button>
@@ -1304,51 +1311,84 @@
             </label>
           </div>
         </div>
+        </div>
 
-        <!-- PHẦN 2: CẤU HÌNH GEMINI AI -->
-        <div class="completion-details-card mt-12">
-          <div class="section-heading">✨ 2. Cấu Hình Gemini AI Tự Động Đọc Văn Bản</div>
+        <!-- TAB 2: AI HỆ THỐNG -->
+        <div class="settings-tab-panel" data-settings-panel="ai">
+        <!-- PHẦN 2: CẤU HÌNH AI HỆ THỐNG -->
+        <div class="completion-details-card">
+          <div class="section-heading">✨ Cấu Hình AI Hệ Thống (Đọc Văn Bản, Khớp Lệnh &amp; Tạo CV NĐ 30)</div>
+
+          <div class="form-row-2 mt-12">
+            <div class="form-group">
+              <label for="systemAiProviderSelect">Nhà cung cấp AI chính</label>
+              <select id="systemAiProviderSelect">
+                <option value="gemini">✨ Google Gemini (Đọc PDF scan, Ảnh, Word, Web tốt nhất)</option>
+                <option value="openai">🤖 ChatGPT / OpenAI (hoặc API tương thích)</option>
+                <option value="claude">🧠 Anthropic Claude (Đọc PDF, Ảnh, Word, Web)</option>
+                <option value="deepseek">🐋 DeepSeek (Đọc Word, TXT, trang Web)</option>
+                <option value="gateway">🌐 AI Gateway / Proxy (AI STAR - Gemini, Claude, GPT...)</option>
+              </select>
+            </div>
+            <div class="form-group" id="systemAiBaseUrlGroup">
+              <label for="systemAiBaseUrlInput">API Base URL</label>
+              <input
+                type="text"
+                id="systemAiBaseUrlInput"
+                placeholder="https://api.openai.com/v1"
+              />
+            </div>
+          </div>
 
           <div class="form-group mt-12">
-            <label for="geminiApiKeyInput">Gemini API Key</label>
+            <label for="geminiApiKeyInput" id="systemAiKeyLabel">Gemini API Key</label>
             <input
               type="password"
               id="geminiApiKeyInput"
               placeholder="Nhập mã API Key từ Google AI Studio (AIzaSy...)"
+              autocomplete="off"
             />
-            <span class="hint-text">
-              Lấy mã miễn phí tại <code>https://aistudio.google.com/apikey</code>. API Key được lưu cục bộ an toàn trên máy của bạn.
+            <span class="hint-text" id="systemAiHintText">
+              Lấy mã miễn phí tại <code>https://aistudio.google.com/apikey</code>. API Key được lưu cục bộ an toàn trên máy của bạn và dùng chung cho cả Chatbox AI.
             </span>
           </div>
 
           <div class="form-group mt-12">
-            <label for="geminiModelSelect">Mô hình Gemini AI sử dụng</label>
+            <label for="geminiModelSelect">Mô hình AI sử dụng</label>
             <div class="storage-dir-row">
               <select id="geminiModelSelect">
-                <option value="gemini-2.5-flash">⚡ gemini-2.5-flash (Khuyên dùng - Nhanh & Đọc PDF/OCR rất chuẩn)</option>
-                <option value="gemini-2.5-pro">🧠 gemini-2.5-pro (Chuyên sâu cho văn bản dài & phức tạp)</option>
+                <option value="gemini-2.5-flash">⚡ gemini-2.5-flash (Khuyên dùng - Nhanh &amp; Đọc PDF/OCR rất chuẩn)</option>
+                <option value="gemini-2.5-pro">🧠 gemini-2.5-pro (Chuyên sâu cho văn bản dài &amp; phức tạp)</option>
                 <option value="gemini-2.0-flash">🚀 gemini-2.0-flash (Tốc độ phản hồi cực nhanh)</option>
               </select>
-              <button type="button" class="btn btn-secondary btn-xs" id="btnFetchGeminiModelsMain" title="Tải danh sách model mới nhất từ Gemini API">
+              <button type="button" class="btn btn-secondary btn-xs" id="btnFetchGeminiModelsMain" title="Tải danh sách model mới nhất từ API của nhà cung cấp đang chọn">
                 🔄 Tải DS Model
               </button>
             </div>
+            <input
+              type="text"
+              id="systemAiCustomModelInput"
+              class="mt-6 hidden"
+              placeholder="Nhập tên model tùy chỉnh..."
+            />
           </div>
 
           <div class="auto-zalo-box mt-12">
             <label class="checkbox-row">
               <input type="checkbox" id="chkAutoAnalyzeOnPick" checked />
               <span class="checkbox-title">
-                ✨ Tự động dùng AI Gemini đọc và điền thông tin ngay khi chọn tệp đính kèm
+                ✨ Tự động dùng AI đọc và điền thông tin ngay khi chọn tệp đính kèm
               </span>
             </label>
           </div>
         </div>
+        </div>
 
-        <!-- PHẦN 3: CẤU HÌNH NƠI LƯU TRỮ FILE VĂN BẢN -->
+        <!-- TAB 1 (TIẾP): CẤU HÌNH NƠI LƯU TRỮ FILE VĂN BẢN -->
+        <div class="settings-tab-panel hidden" data-settings-panel="portal_storage">
         <div class="completion-details-card mt-12" id="storageSettingsSection">
           <div class="section-heading">
-            <span>📁 3. Cấu Hình Nơi Lưu Trữ Văn Bản</span>
+            <span>📁 Cấu Hình Nơi Lưu Trữ Văn Bản</span>
             <div class="inline-actions">
               <button type="button" class="btn btn-ghost btn-xs" id="btnResetStorageDefaults" title="Đặt lại về thư mục mặc định trong data/LuuTru_VanBan">
                 🔄 Mặc định
@@ -1371,11 +1411,13 @@
             </span>
           </div>
         </div>
+        </div>
 
-        <!-- PHẦN 4: CHUYÊN VIÊN & ĐỒNG BỘ GOOGLE SHEET TỔNG HỢP -->
-        <div class="completion-details-card mt-12" id="googleSheetSettingsSection">
+        <!-- TAB 3: CHUYÊN VIÊN & ĐỒNG BỘ GOOGLE SHEET TỔNG HỢP -->
+        <div class="settings-tab-panel hidden" data-settings-panel="gsheet">
+        <div class="completion-details-card" id="googleSheetSettingsSection">
           <div class="section-heading">
-            <span>📊 4. Chuyên Viên & Đồng Bộ Google Sheet Tổng Hợp (Apps Script)</span>
+            <span>📊 Chuyên Viên & Đồng Bộ Google Sheet Tổng Hợp (Apps Script)</span>
             <div class="inline-actions">
               <button type="button" class="btn btn-secondary btn-xs" id="btnOpenAppsScriptModal" title="Xem & sao chép mã Code.gs và Dashboard.html để cài đặt trên Google Sheet">
                 📜 Lấy mã Apps Script
@@ -1445,6 +1487,176 @@
             </label>
           </div>
           <div id="googleSheetTestStatus" class="ai-analysis-status hidden mt-12"></div>
+        </div>
+        </div>
+
+        <!-- TAB 4: CHUẨN HÓA CÔNG VĂN GIAO VIỆC THEO NGHỊ ĐỊNH 30/2020/NĐ-CP -->
+        <div class="settings-tab-panel hidden" data-settings-panel="nd30">
+        <div class="completion-details-card" id="nd30SettingsSection">
+          <div class="section-heading">
+            <span>📜 Chuẩn Hóa Công Văn Giao Việc (Nghị Định 30/2020/NĐ-CP)</span>
+            <button type="button" class="btn btn-secondary btn-xs" id="btnImportNd30FromAddIn" title="Đọc thông tin cơ quan, người ký, lề trang từ Add-in NghiDinh30WordAddIn">
+              🔄 Nạp từ Word Add-in
+            </button>
+          </div>
+
+          <div class="form-row-2 mt-12">
+            <div class="form-group">
+              <label for="nd30ParentAgencyInput">Cơ quan chủ quản:</label>
+              <input type="text" id="nd30ParentAgencyInput" placeholder="VD: ỦY BAN NHÂN DÂN XÃ" />
+            </div>
+            <div class="form-group">
+              <label for="nd30IssuingAgencyInput">Cơ quan ban hành:</label>
+              <input type="text" id="nd30IssuingAgencyInput" placeholder="VD: BÌNH THẠNH ĐÔNG" />
+            </div>
+          </div>
+
+          <div class="form-row-2 mt-12">
+            <div class="form-group">
+              <label for="nd30AgencyCodeInput">Mã viết tắt cơ quan:</label>
+              <input type="text" id="nd30AgencyCodeInput" placeholder="VD: UBND" />
+            </div>
+            <div class="form-group">
+              <label for="nd30DepartmentCodeInput">Mã đơn vị soạn thảo:</label>
+              <input type="text" id="nd30DepartmentCodeInput" placeholder="VD: VP" />
+            </div>
+          </div>
+
+          <div class="form-row-2 mt-12">
+            <div class="form-group">
+              <label for="nd30LocationInput">Địa danh ban hành:</label>
+              <input type="text" id="nd30LocationInput" placeholder="VD: Bình Thạnh Đông" />
+            </div>
+            <div class="form-group">
+              <label for="nd30NextDocNumInput">Số văn bản tiếp theo:</label>
+              <input type="number" id="nd30NextDocNumInput" min="1" value="1" />
+            </div>
+          </div>
+
+          <div class="form-row-2 mt-12">
+            <div class="form-group">
+              <label for="nd30SignerTitleInput">Chức vụ người ký:</label>
+              <input type="text" id="nd30SignerTitleInput" placeholder="VD: CHỦ TỊCH" />
+            </div>
+            <div class="form-group">
+              <label for="nd30SignerNameInput">Họ và tên người ký:</label>
+              <input type="text" id="nd30SignerNameInput" placeholder="VD: Nguyễn Văn Nghĩa" />
+            </div>
+          </div>
+
+          <div class="auto-zalo-box mt-12">
+            <label class="checkbox-row" style="margin-bottom: 6px;">
+              <input type="checkbox" id="chkNd30AutoGenerateOnAssign" checked />
+              <span class="checkbox-title">
+                📜 Tự động tạo Công văn Giao việc (.docx) chuẩn NĐ 30/2020 ngay khi bắt sự kiện giao việc
+              </span>
+            </label>
+            <label class="checkbox-row">
+              <input type="checkbox" id="chkNd30UseAiDrafting" checked />
+              <span class="checkbox-title">
+                ✨ Dùng AI soạn nội dung công văn giao việc chi tiết (tự dùng mẫu chuẩn nếu chưa có API Key)
+              </span>
+            </label>
+          </div>
+        </div>
+        </div>
+
+        <!-- TAB 5: QUẢN LÝ PHIÊN BẢN & TỰ ĐỘNG CẬP NHẬT QUA GITHUB RELEASES -->
+        <div class="settings-tab-panel hidden" data-settings-panel="updates" id="updateSettingsSection">
+          <div class="update-banner-card">
+            <div>
+              <div class="update-version-row">
+                <span class="update-current-badge" id="updCurrentVersionBadge">zOffice v1.0.0</span>
+                <span class="update-last-checked" id="updLastCheckedText">Chưa kiểm tra</span>
+              </div>
+              <div class="update-status-text" id="updStatusBanner">
+                Cấu hình Repository GitHub bên dưới để kiểm tra bản phát hành mới.
+              </div>
+            </div>
+            <div class="inline-actions">
+              <button type="button" class="btn btn-secondary btn-sm" id="btnCheckUpdatesNow">
+                🔍 Kiểm tra ngay
+              </button>
+              <button type="button" class="btn btn-primary btn-sm hidden" id="btnInstallUpdateNow">
+                ⬇️ Tải &amp; Cập nhật tự động
+              </button>
+            </div>
+          </div>
+
+          <div class="update-progress-wrap hidden" id="updateProgressWrap">
+            <div class="update-progress-track">
+              <div class="update-progress-fill" id="updProgressBar" style="width: 0%;"></div>
+            </div>
+            <div class="hint-text mt-6" id="updProgressText">Đang chuẩn bị...</div>
+          </div>
+
+          <div class="completion-details-card mt-12">
+            <div class="section-heading">
+              <span>⚙️ Cấu Hình Nguồn Cập Nhật GitHub Releases</span>
+              <button type="button" class="btn btn-secondary btn-xs" id="btnSaveUpdateConfig">
+                💾 Lưu cấu hình cập nhật
+              </button>
+            </div>
+            <div class="form-row-2 mt-12">
+              <div class="form-group">
+                <label for="updGithubRepoInput">Repository GitHub (owner/repo hoặc URL)</label>
+                <input
+                  type="text"
+                  id="updGithubRepoInput"
+                  placeholder="VD: Zon639/zOffice hoặc https://github.com/Zon639/zOffice"
+                />
+              </div>
+              <div class="form-group">
+                <label for="updGithubTokenInput">GitHub Token (chỉ cần nếu Repo ở chế độ Private)</label>
+                <input
+                  type="password"
+                  id="updGithubTokenInput"
+                  placeholder="ghp_... (để trống nếu là repo Public)"
+                  autocomplete="off"
+                />
+              </div>
+            </div>
+            <div class="form-row-2 mt-12">
+              <label class="checkbox-row">
+                <input type="checkbox" id="chkUpdAutoCheck" checked />
+                <span class="checkbox-title">🔄 Tự động kiểm tra bản mới định kỳ &amp; khi mở zOffice</span>
+              </label>
+              <label class="checkbox-row">
+                <input type="checkbox" id="chkUpdAutoInstall" checked />
+                <span class="checkbox-title">⚡ Tự động tải, cài đặt &amp; khởi động lại khi có bản phát hành mới</span>
+              </label>
+            </div>
+            <div class="mt-6">
+              <label class="checkbox-row">
+                <input type="checkbox" id="chkUpdIncludePre" />
+                <span class="checkbox-title">🧪 Bao gồm bản thử nghiệm (Pre-release)</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="completion-details-card mt-12">
+            <div class="section-heading">
+              <span>📦 Danh Sách Phiên Bản &amp; Ghi Chú Phát Hành (Changelog)</span>
+              <div class="inline-actions">
+                <select id="updReleasesSelect" class="update-release-select">
+                  <option value="">-- Chưa có dữ liệu phát hành --</option>
+                </select>
+                <button type="button" class="btn btn-ghost btn-xs hidden" id="btnOpenGithubRelease">
+                  🌐 Mở GitHub
+                </button>
+              </div>
+            </div>
+            <pre class="update-changelog-box mt-12" id="updReleaseNotesBox">Bấm "Kiểm tra ngay" để tải danh sách bản phát hành từ GitHub Releases.</pre>
+          </div>
+
+          <div class="completion-details-card mt-12">
+            <div class="section-heading">
+              <span>🕒 Lịch Sử Cập Nhật &amp; Bản Sao Lưu Cục Bộ</span>
+            </div>
+            <div id="updHistoryList" class="update-history-list mt-12">
+              <div class="empty-hint">Chưa có lịch sử cập nhật nào.</div>
+            </div>
+          </div>
         </div>
       </form>
 
@@ -1586,6 +1798,7 @@
               <option value="openai">🤖 ChatGPT / OpenAI</option>
               <option value="claude">🧠 Anthropic Claude</option>
               <option value="deepseek">🐋 DeepSeek</option>
+              <option value="gateway">🌐 AI Gateway / Proxy (AI STAR)</option>
               <option value="ollama">🦙 Ollama (Chạy offline trên máy)</option>
             </select>
           </div>
@@ -1725,10 +1938,45 @@
           <div class="hint-text mt-6" id="aiCfgModelStatus_deepseek"></div>
         </div>
 
-        <!-- Provider 5: Ollama Local -->
+        <!-- Provider 5: AI Gateway / Proxy (AI STAR) -->
         <div class="completion-details-card mt-12">
           <div class="section-heading">
-            <span>🦙 5. Ollama (Chạy Model AI Local trên máy)</span>
+            <span>🌐 5. AI Gateway / Proxy (AI STAR - Gemini, Claude, GPT...)</span>
+            <button type="button" class="btn btn-secondary btn-xs btn-fetch-provider-models" data-fetch-provider="gateway">
+              🔄 Tải DS Model Gateway
+            </button>
+          </div>
+          <div class="form-group mt-12">
+            <label for="aiCfgGatewayBaseUrl">Gateway API Base URL</label>
+            <input type="text" id="aiCfgGatewayBaseUrl" placeholder="https://ai.starimg.ru/v1" />
+            <span class="hint-text">Mặc định AI STAR: <code>https://ai.starimg.ru/v1</code> (hỗ trợ các key proxy chuẩn OpenAI / sk-ant-...)</span>
+          </div>
+          <div class="form-row-2 mt-12">
+            <div class="form-group">
+              <label for="aiCfgGatewayKey">Gateway API Key</label>
+              <input type="password" id="aiCfgGatewayKey" placeholder="sk-ant-api03-... hoặc sk-..." autocomplete="off" />
+            </div>
+            <div class="form-group">
+              <label for="aiCfgModelSelect_gateway">Tên Model Gateway</label>
+              <select id="aiCfgModelSelect_gateway" class="ai-cfg-model-select" data-provider-select="gateway"></select>
+              <input type="text" id="aiCfgGatewayModel" class="mt-6 hidden" list="gatewayPresetModelsList" placeholder="gemini-3.8-flash" />
+              <datalist id="gatewayPresetModelsList">
+                <option value="gemini-3.8-flash"></option>
+                <option value="gemini-3.1-pro"></option>
+                <option value="claude-sonnet-5"></option>
+                <option value="claude-opus-5"></option>
+                <option value="gpt-5.6-sol"></option>
+                <option value="deepseek-v4-pro-0813"></option>
+              </datalist>
+            </div>
+          </div>
+          <div class="hint-text mt-6" id="aiCfgModelStatus_gateway"></div>
+        </div>
+
+        <!-- Provider 6: Ollama Local -->
+        <div class="completion-details-card mt-12">
+          <div class="section-heading">
+            <span>🦙 6. Ollama (Chạy Model AI Local trên máy)</span>
             <button type="button" class="btn btn-secondary btn-xs btn-fetch-provider-models" id="btnFetchOllamaModels" data-fetch-provider="ollama">
               🔄 Tải DS Model Ollama
             </button>
@@ -1845,121 +2093,6 @@
 
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-close-modal="appsScriptModal">Đóng</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ========================================================================= -->
-  <!-- MODAL 10: QUẢN LÝ PHIÊN BẢN & TỰ ĐỘNG CẬP NHẬT QUA GITHUB RELEASES        -->
-  <!-- ========================================================================= -->
-  <div class="modal-backdrop hidden" id="updateManagerModal">
-    <div class="modal-container modal-lg">
-      <div class="modal-header">
-        <div>
-          <h2>🔄 Quản Lý Phiên Bản & Cập Nhật Tự Động (GitHub)</h2>
-          <p class="modal-subtitle">Theo dõi phiên bản zOffice hiện tại, kiểm tra bản phát hành mới trên GitHub Releases và cập nhật 1 chạm (giữ nguyên dữ liệu)</p>
-        </div>
-        <button class="modal-close" data-close-modal="updateManagerModal">✕</button>
-      </div>
-
-      <div class="modal-body">
-        <!-- Banner trạng thái phiên bản -->
-        <div class="update-banner-card">
-          <div>
-            <div class="update-version-row">
-              <span class="update-current-badge" id="updCurrentVersionBadge">zOffice v1.0.0</span>
-              <span class="update-last-checked" id="updLastCheckedText">Chưa kiểm tra</span>
-            </div>
-            <div class="update-status-text" id="updStatusBanner">
-              Cấu hình Repository GitHub bên dưới để kiểm tra bản phát hành mới.
-            </div>
-          </div>
-          <div class="inline-actions">
-            <button type="button" class="btn btn-secondary btn-sm" id="btnCheckUpdatesNow">
-              🔍 Kiểm tra ngay
-            </button>
-            <button type="button" class="btn btn-primary btn-sm hidden" id="btnInstallUpdateNow">
-              ⬇️ Tải & Cập nhật tự động
-            </button>
-          </div>
-        </div>
-
-        <!-- Thanh tiến trình tải & cài đặt -->
-        <div class="update-progress-wrap hidden" id="updateProgressWrap">
-          <div class="update-progress-track">
-            <div class="update-progress-fill" id="updProgressBar" style="width: 0%;"></div>
-          </div>
-          <div class="hint-text mt-6" id="updProgressText">Đang chuẩn bị...</div>
-        </div>
-
-        <!-- Cấu hình GitHub Repository -->
-        <div class="completion-details-card mt-12">
-          <div class="section-heading">
-            <span>⚙️ Cấu Hình Nguồn Cập Nhật GitHub Releases</span>
-            <button type="button" class="btn btn-secondary btn-xs" id="btnSaveUpdateConfig">
-              💾 Lưu cấu hình
-            </button>
-          </div>
-          <div class="form-row-2 mt-12">
-            <div class="form-group">
-              <label for="updGithubRepoInput">Repository GitHub (owner/repo hoặc URL)</label>
-              <input
-                type="text"
-                id="updGithubRepoInput"
-                placeholder="VD: nguyenvana/zOffice hoặc https://github.com/nguyenvana/zOffice"
-              />
-            </div>
-            <div class="form-group">
-              <label for="updGithubTokenInput">GitHub Token (chỉ cần nếu Repo ở chế độ Private)</label>
-              <input
-                type="password"
-                id="updGithubTokenInput"
-                placeholder="ghp_... (để trống nếu là repo Public)"
-                autocomplete="off"
-              />
-            </div>
-          </div>
-          <div class="form-row-2 mt-12">
-            <label class="checkbox-row">
-              <input type="checkbox" id="chkUpdAutoCheck" checked />
-              <span class="checkbox-title">🔄 Tự động kiểm tra bản mới mỗi khi mở zOffice</span>
-            </label>
-            <label class="checkbox-row">
-              <input type="checkbox" id="chkUpdIncludePre" />
-              <span class="checkbox-title">🧪 Bao gồm bản thử nghiệm (Pre-release)</span>
-            </label>
-          </div>
-        </div>
-
-        <!-- Chi tiết bản phát hành trên GitHub -->
-        <div class="completion-details-card mt-12">
-          <div class="section-heading">
-            <span>📦 Danh Sách Phiên Bản & Ghi Chú Phát Hành (Changelog)</span>
-            <div class="inline-actions">
-              <select id="updReleasesSelect" class="update-release-select">
-                <option value="">-- Chưa có dữ liệu phát hành --</option>
-              </select>
-              <button type="button" class="btn btn-ghost btn-xs hidden" id="btnOpenGithubRelease">
-                🌐 Mở GitHub
-              </button>
-            </div>
-          </div>
-          <pre class="update-changelog-box mt-12" id="updReleaseNotesBox">Bấm "Kiểm tra ngay" để tải danh sách bản phát hành từ GitHub Releases.</pre>
-        </div>
-
-        <!-- Lịch sử cập nhật & Khôi phục bản sao lưu -->
-        <div class="completion-details-card mt-12">
-          <div class="section-heading">
-            <span>🕒 Lịch Sử Cập Nhật & Bản Sao Lưu Cục Bộ</span>
-          </div>
-          <div id="updHistoryList" class="update-history-list mt-12">
-            <div class="empty-hint">Chưa có lịch sử cập nhật nào.</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-close-modal="updateManagerModal">Đóng</button>
       </div>
     </div>
   </div>

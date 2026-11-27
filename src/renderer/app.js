@@ -69,6 +69,8 @@ const state = {
 
   // Gemini AI & Web Portal settings state
   geminiSettings: {
+    aiProvider: "gemini",
+    aiProviders: {},
     hasApiKey: false,
     maskedApiKey: "",
     geminiApiKey: "",
@@ -78,6 +80,8 @@ const state = {
     portalHomeUrl: "https://www.google.com",
     portalBookmarks: [],
   },
+  systemAiDraftProviders: null,
+  systemAiActiveDraftProvider: "gemini",
 
   // App version & GitHub auto-update state
   update: {
@@ -94,6 +98,82 @@ function escapeHtml(str) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
+}
+
+function isoDateToVn(isoStr) {
+  const s = String(isoStr || "").trim();
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+  return s;
+}
+
+function vnDateToIso(inputStr) {
+  const s = String(inputStr || "").trim();
+  if (!s) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (!m) return null;
+  const dd = Number.parseInt(m[1], 10);
+  const mm = Number.parseInt(m[2], 10);
+  const yyyy = Number.parseInt(m[3], 10);
+  const d = new Date(yyyy, mm - 1, dd);
+  if (d.getFullYear() !== yyyy || d.getMonth() !== mm - 1 || d.getDate() !== dd) {
+    return null;
+  }
+  return `${yyyy}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
+}
+
+function isoDateTimeToVn(isoStr) {
+  const s = String(isoStr || "").trim();
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?/);
+  if (m) {
+    const datePart = `${m[3]}/${m[2]}/${m[1]}`;
+    return m[4] && m[5] ? `${datePart} ${m[4]}:${m[5]}` : `${datePart} 17:00`;
+  }
+  return s;
+}
+
+function vnDateTimeToIso(inputStr) {
+  const s = String(inputStr || "").trim();
+  if (!s) return "";
+  const isoM = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?/);
+  if (isoM) {
+    return `${isoM[1]}-${isoM[2]}-${isoM[3]}T${isoM[4] || "17"}:${isoM[5] || "00"}`;
+  }
+  const m = s.match(
+    /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:\s+(\d{1,2}):(\d{2}))?$/
+  );
+  if (!m) return null;
+  const dd = Number.parseInt(m[1], 10);
+  const mm = Number.parseInt(m[2], 10);
+  const yyyy = Number.parseInt(m[3], 10);
+  const hh = m[4] !== undefined ? Number.parseInt(m[4], 10) : 17;
+  const min = m[5] !== undefined ? Number.parseInt(m[5], 10) : 0;
+  if (hh < 0 || hh > 23 || min < 0 || min > 59) return null;
+  const d = new Date(yyyy, mm - 1, dd);
+  if (d.getFullYear() !== yyyy || d.getMonth() !== mm - 1 || d.getDate() !== dd) {
+    return null;
+  }
+  return `${yyyy}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}T${String(
+    hh
+  ).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
+}
+
+function setDocModalDatesFromIso(receivedIso, dueIso) {
+  const recTextEl = document.getElementById("docReceivedDateInput");
+  const recPickEl = document.getElementById("docReceivedDatePicker");
+  const dueTextEl = document.getElementById("docDueDateInput");
+  const duePickEl = document.getElementById("docDueDatePicker");
+
+  const recIso = receivedIso ? String(receivedIso).slice(0, 10) : "";
+  const dIso = dueIso ? String(dueIso).slice(0, 16) : "";
+
+  if (recTextEl) recTextEl.value = recIso ? isoDateToVn(recIso) : "";
+  if (recPickEl) recPickEl.value = /^\d{4}-\d{2}-\d{2}$/.test(recIso) ? recIso : "";
+  if (dueTextEl) dueTextEl.value = dIso ? isoDateTimeToVn(dIso) : "";
+  if (duePickEl) {
+    duePickEl.value = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(dIso) ? dIso.slice(0, 16) : "";
+  }
 }
 
 function showToast(message, type = "info") {
@@ -784,6 +864,13 @@ function renderDocumentCard(doc) {
           >
             ${zaloBtnLabel}
           </button>
+          <button
+            class="btn btn-secondary btn-sm"
+            title="Tạo / xuất lại Công văn Giao việc chuẩn Nghị định 30/2020/NĐ-CP (.docx)"
+            onclick="generateNd30DocForTask('${escapeHtml(doc.id)}')"
+          >
+            📜 Tạo CV NĐ30
+          </button>
           ${statusToggleBtn}
           <button
             class="btn btn-secondary btn-sm"
@@ -867,13 +954,19 @@ function openDocModal(docId = null) {
         doc.specialistName || state.geminiSettings?.specialistName || "";
     }
     document.getElementById("docTitleInput").value = doc.title || "";
-    document.getElementById("docReceivedDateInput").value = doc.receivedDate || "";
-    document.getElementById("docDueDateInput").value = (doc.dueDate || "").slice(0, 16);
+    setDocModalDatesFromIso(doc.receivedDate || "", (doc.dueDate || "").slice(0, 16));
     document.getElementById("docPriorityInput").value = doc.priority || "normal";
     document.getElementById("docNotesInput").value = doc.notes || "";
     document.getElementById("docStatusInput").value = doc.status || "processing";
     document.getElementById("docCompletionNoteInput").value = doc.completionNote || "";
+    const hasAssignAtt = Array.isArray(doc.attachments)
+      ? doc.attachments.some((a) => a.category === "assignment")
+      : false;
+    const nd30Auto = state.geminiSettings?.nd30Settings?.autoGenerateOnAssign !== false;
+    const chkNd30El = document.getElementById("chkAutoGenerateNd30");
+    if (chkNd30El) chkNd30El.checked = !hasAssignAtt && nd30Auto;
     document.getElementById("chkAutoSendZalo").checked = false;
+    document.getElementById("chkAutoSendAttachments").checked = false;
 
     state.formAssignees = JSON.parse(JSON.stringify(doc.assignees || []));
     state.formAttachments = JSON.parse(JSON.stringify(doc.attachments || []));
@@ -896,12 +989,15 @@ function openDocModal(docId = null) {
       tomorrow.getDate()
     )}T17:00`;
 
-    document.getElementById("docReceivedDateInput").value = todayStr;
-    document.getElementById("docDueDateInput").value = defaultDue;
+    setDocModalDatesFromIso(todayStr, defaultDue);
     document.getElementById("docPriorityInput").value = "normal";
     document.getElementById("docStatusInput").value = "processing";
-    document.getElementById("chkAutoSendZalo").checked = true;
-    document.getElementById("chkAutoSendAttachments").checked = true;
+    const chkNd30El = document.getElementById("chkAutoGenerateNd30");
+    if (chkNd30El) {
+      chkNd30El.checked = state.geminiSettings?.nd30Settings?.autoGenerateOnAssign !== false;
+    }
+    document.getElementById("chkAutoSendZalo").checked = false;
+    document.getElementById("chkAutoSendAttachments").checked = false;
 
     state.formAssignees = [];
     state.formAttachments = [];
@@ -920,6 +1016,19 @@ function openDocModal(docId = null) {
   modal.classList.remove("hidden");
 }
 
+function getActiveSystemAiSummary() {
+  const s = state.geminiSettings || {};
+  const prov = s.aiProvider || "gemini";
+  const label = getProviderLabel(prov);
+  const model =
+    s.activeAiModel ||
+    s.aiProviders?.[prov]?.model ||
+    SYSTEM_AI_UI_META[prov]?.defaultModel ||
+    s.geminiModel ||
+    "gemini-2.5-flash";
+  return { provider: prov, label, model };
+}
+
 function updateGeminiHeaderBadge() {
   const dot = document.getElementById("geminiKeyStatusDot");
   const btn = document.getElementById("btnOpenGeminiSettings");
@@ -935,9 +1044,10 @@ function updateGeminiHeaderBadge() {
     const ioStatus = state.geminiSettings.iofficeUsername
       ? `iOffice: ${state.geminiSettings.iofficeUsername}`
       : "Chưa lưu TK iOffice";
+    const activeAi = getActiveSystemAiSummary();
     const aiStatus = state.geminiSettings.hasApiKey
-      ? `AI: ${state.geminiSettings.geminiModel || "gemini-2.5-flash"}`
-      : "Chưa nhập Gemini Key";
+      ? `${activeAi.label}: ${activeAi.model}`
+      : "Chưa nhập API Key AI";
     btn.title = `Cài đặt (${ioStatus} | ${aiStatus})`;
   }
 
@@ -949,7 +1059,23 @@ function updateGeminiHeaderBadge() {
   }
 }
 
-function openGeminiSettingsModal() {
+function switchSystemSettingsTab(tabName = "ai") {
+  const bar = document.getElementById("systemSettingsTabsBar");
+  const form = document.getElementById("geminiSettingsForm");
+  if (!bar || !form) return;
+
+  bar.querySelectorAll("[data-settings-tab]").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.settingsTab === tabName);
+  });
+  form.querySelectorAll("[data-settings-panel]").forEach((panel) => {
+    panel.classList.toggle("hidden", panel.dataset.settingsPanel !== tabName);
+  });
+  if (tabName === "updates") {
+    renderUpdateModal();
+  }
+}
+
+function openGeminiSettingsModal(initialTab = "ai") {
   const webview = document.getElementById("portalWebview");
   const currentPortalUrl =
     (webview?.getURL && webview.getURL()) ||
@@ -978,12 +1104,41 @@ function openGeminiSettingsModal() {
     ioAutoSaveEl.checked = state.geminiSettings.iofficeAutoSaveOnWeb !== false;
   }
 
-  document.getElementById("geminiApiKeyInput").value =
-    state.geminiSettings.geminiApiKey || "";
-  populateMainGeminiModelSelect(
-    state.geminiSettings.geminiModel || "gemini-2.5-flash",
-    state.aiChat.settings?.loadedModels?.gemini || []
-  );
+  const activeProv = state.geminiSettings.aiProvider || "gemini";
+  const sysProviders = state.geminiSettings.aiProviders || {};
+  const chatCfg = state.aiChat.settings || {};
+  state.systemAiDraftProviders = {
+    gemini: {
+      baseUrl: "https://generativelanguage.googleapis.com",
+      apiKey: sysProviders.gemini?.apiKey || state.geminiSettings.geminiApiKey || chatCfg.gemini?.apiKey || "",
+      model: sysProviders.gemini?.model || state.geminiSettings.geminiModel || "gemini-2.5-flash",
+    },
+    openai: {
+      baseUrl: sysProviders.openai?.baseUrl || chatCfg.openai?.baseUrl || "https://api.openai.com/v1",
+      apiKey: sysProviders.openai?.apiKey || chatCfg.openai?.apiKey || "",
+      model: sysProviders.openai?.model || chatCfg.openai?.model || "gpt-4o-mini",
+    },
+    claude: {
+      baseUrl: sysProviders.claude?.baseUrl || chatCfg.claude?.baseUrl || "https://api.anthropic.com",
+      apiKey: sysProviders.claude?.apiKey || chatCfg.claude?.apiKey || "",
+      model: sysProviders.claude?.model || chatCfg.claude?.model || "claude-sonnet-4-20250514",
+    },
+    deepseek: {
+      baseUrl: sysProviders.deepseek?.baseUrl || chatCfg.deepseek?.baseUrl || "https://api.deepseek.com/v1",
+      apiKey: sysProviders.deepseek?.apiKey || chatCfg.deepseek?.apiKey || "",
+      model: sysProviders.deepseek?.model || chatCfg.deepseek?.model || "deepseek-chat",
+    },
+    gateway: {
+      baseUrl: sysProviders.gateway?.baseUrl || chatCfg.gateway?.baseUrl || "https://ai.starimg.ru/v1",
+      apiKey: sysProviders.gateway?.apiKey || chatCfg.gateway?.apiKey || "",
+      model: sysProviders.gateway?.model || chatCfg.gateway?.model || "gemini-3.8-flash",
+    },
+  };
+  state.systemAiActiveDraftProvider = activeProv;
+  const sysProvEl = document.getElementById("systemAiProviderSelect");
+  if (sysProvEl) sysProvEl.value = activeProv;
+  renderSystemAiProviderFields(activeProv);
+
   document.getElementById("chkAutoAnalyzeOnPick").checked =
     state.geminiSettings.autoAnalyzeOnPick !== false;
 
@@ -1012,7 +1167,30 @@ function openGeminiSettingsModal() {
     gsStatusEl.innerHTML = "";
   }
 
+  populateNd30SettingsInputs(state.geminiSettings.nd30Settings || {});
+  renderUpdateModal();
+  switchSystemSettingsTab(initialTab || "ai");
+
   document.getElementById("geminiSettingsModal").classList.remove("hidden");
+}
+
+function populateNd30SettingsInputs(nd30 = {}) {
+  const setVal = (id, v) => {
+    const el = document.getElementById(id);
+    if (el) el.value = v ?? "";
+  };
+  setVal("nd30ParentAgencyInput", nd30.parentAgency || "");
+  setVal("nd30IssuingAgencyInput", nd30.issuingAgency || "");
+  setVal("nd30AgencyCodeInput", nd30.agencyCode || "UBND");
+  setVal("nd30DepartmentCodeInput", nd30.departmentCode || "VP");
+  setVal("nd30LocationInput", nd30.location || "");
+  setVal("nd30NextDocNumInput", nd30.nextDocNumber || 1);
+  setVal("nd30SignerTitleInput", nd30.signerTitle || "CHỦ TỊCH");
+  setVal("nd30SignerNameInput", nd30.signerName || "");
+  const autoChk = document.getElementById("chkNd30AutoGenerateOnAssign");
+  const aiChk = document.getElementById("chkNd30UseAiDrafting");
+  if (autoChk) autoChk.checked = nd30.autoGenerateOnAssign !== false;
+  if (aiChk) aiChk.checked = nd30.useAiDrafting !== false;
 }
 
 async function triggerIofficeAutoLogin({ forceSubmit = false, silent = true } = {}) {
@@ -1073,7 +1251,10 @@ function applyExtractedDataToForm(ext, sourceLabel, extraActionHtml = "") {
     document.getElementById("docTitleInput").value = ext.title;
   }
   if (ext.receivedDate && /^\d{4}-\d{2}-\d{2}$/.test(ext.receivedDate.trim())) {
-    document.getElementById("docReceivedDateInput").value = ext.receivedDate.trim();
+    const isoRec = ext.receivedDate.trim();
+    document.getElementById("docReceivedDateInput").value = isoDateToVn(isoRec);
+    const recPick = document.getElementById("docReceivedDatePicker");
+    if (recPick) recPick.value = isoRec;
   }
   if (ext.dueDate) {
     let cleanDue = ext.dueDate.trim();
@@ -1081,7 +1262,10 @@ function applyExtractedDataToForm(ext, sourceLabel, extraActionHtml = "") {
       cleanDue = `${cleanDue}T17:00`;
     }
     if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(cleanDue)) {
-      document.getElementById("docDueDateInput").value = cleanDue.slice(0, 16);
+      const isoDue = cleanDue.slice(0, 16);
+      document.getElementById("docDueDateInput").value = isoDateTimeToVn(isoDue);
+      const duePick = document.getElementById("docDueDatePicker");
+      if (duePick) duePick.value = isoDue;
     }
   }
   if (["normal", "important", "urgent"].includes(ext.priority)) {
@@ -1118,10 +1302,11 @@ async function analyzeFileAndFillForm(filePath, fileName) {
     return;
   }
 
+  const activeAi = getActiveSystemAiSummary();
   statusBox.className = "ai-analysis-status loading";
   statusBox.classList.remove("hidden");
-  statusBox.innerHTML = `⏳ AI Gemini (<b>${escapeHtml(
-    state.geminiSettings.geminiModel
+  statusBox.innerHTML = `⏳ ${escapeHtml(activeAi.label)} (<b>${escapeHtml(
+    activeAi.model
   )}</b>) đang đọc tệp <b>"${escapeHtml(
     fileName
   )}"</b> và tự động trích xuất thông tin văn bản...`;
@@ -1401,11 +1586,12 @@ async function pullCurrentWebPageToApp({ keepExistingModal = false } = {}) {
     openDocModal(null);
   }
 
+  const activeAi = getActiveSystemAiSummary();
   const statusBox = document.getElementById("aiAnalysisStatusBox");
   statusBox.className = "ai-analysis-status loading";
   statusBox.classList.remove("hidden");
-  statusBox.innerHTML = `⏳ AI Gemini (<b>${escapeHtml(
-    state.geminiSettings.geminiModel
+  statusBox.innerHTML = `⏳ ${escapeHtml(activeAi.label)} (<b>${escapeHtml(
+    activeAi.model
   )}</b>) đang đọc nội dung văn bản (kể cả dấu Số & Ngày tháng ký số trên PDF) và tự động lưu tệp đính kèm vào nhiệm vụ...`;
 
   try {
@@ -1652,9 +1838,12 @@ async function analyzeCompletionFromFile(fileObj) {
     }
   }
 
+  const activeAi = getActiveSystemAiSummary();
   const statusBox = document.getElementById("completionAnalysisStatusBox");
   statusBox.className = "ai-analysis-status loading mt-12";
-  statusBox.innerHTML = `⏳ AI Gemini đang đọc văn bản phản hồi <b>"${escapeHtml(
+  statusBox.innerHTML = `⏳ ${escapeHtml(activeAi.label)} (<b>${escapeHtml(
+    activeAi.model
+  )}</b>) đang đọc văn bản phản hồi <b>"${escapeHtml(
     fileObj.name
   )}"</b> để tìm phần Căn cứ văn bản cấp trên và đối chiếu Số/Ký hiệu...`;
 
@@ -1690,9 +1879,12 @@ async function pullWebCompletionToApp() {
 
   openCompletionMatchModal(true);
 
+  const activeAi = getActiveSystemAiSummary();
   const statusBox = document.getElementById("completionAnalysisStatusBox");
   statusBox.className = "ai-analysis-status loading mt-12";
-  statusBox.innerHTML = `⏳ AI Gemini đang đọc văn bản phản hồi của chuyên viên trên trang Web, lưu tệp đính kèm và đối chiếu Số/Ký hiệu văn bản cấp trên...`;
+  statusBox.innerHTML = `⏳ ${escapeHtml(activeAi.label)} (<b>${escapeHtml(
+    activeAi.model
+  )}</b>) đang đọc văn bản phản hồi của chuyên viên trên trang Web, lưu tệp đính kèm và đối chiếu Số/Ký hiệu văn bản cấp trên...`;
 
   try {
     const cap = await captureCurrentWebviewData(webview);
@@ -2716,42 +2908,85 @@ window.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("zaloAuthModal").classList.remove("hidden");
   });
 
-  document.getElementById("btnOpenGeminiSettings").addEventListener("click", () => {
-    openGeminiSettingsModal();
-  });
+  document
+    .getElementById("btnOpenGeminiSettings")
+    .addEventListener("click", () => {
+      openGeminiSettingsModal("ai");
+    });
+
+  document
+    .querySelectorAll("#systemSettingsTabsBar [data-settings-tab]")
+    .forEach((btn) => {
+      btn.addEventListener("click", () => {
+        switchSystemSettingsTab(btn.dataset.settingsTab || "ai");
+      });
+    });
 
   document.getElementById("btnConfigGeminiFromForm").addEventListener("click", () => {
     openGeminiSettingsModal();
   });
 
   document
+    .getElementById("systemAiProviderSelect")
+    ?.addEventListener("change", (e) => {
+      syncCurrentSystemAiDraftFromInputs();
+      const nextProv = e.target.value || "gemini";
+      state.systemAiActiveDraftProvider = nextProv;
+      renderSystemAiProviderFields(nextProv);
+    });
+
+  document
+    .getElementById("geminiModelSelect")
+    ?.addEventListener("change", (e) => {
+      const customEl = document.getElementById("systemAiCustomModelInput");
+      if (!customEl) return;
+      if (e.target.value === "__custom__") {
+        customEl.classList.remove("hidden");
+        customEl.focus();
+      } else {
+        customEl.classList.add("hidden");
+      }
+    });
+
+  document
     .getElementById("btnFetchGeminiModelsMain")
     ?.addEventListener("click", async (e) => {
       const btn = e.currentTarget;
+      const provider =
+        document.getElementById("systemAiProviderSelect")?.value || "gemini";
       const apiKey = (
         document.getElementById("geminiApiKeyInput")?.value || ""
+      ).trim();
+      const baseUrl = (
+        document.getElementById("systemAiBaseUrlInput")?.value || ""
       ).trim();
       const prev = btn.textContent;
       btn.disabled = true;
       btn.textContent = "⏳ Đang tải...";
       try {
         const res = await window.appApi.fetchAiModels({
-          provider: "gemini",
+          provider,
           apiKey,
+          baseUrl,
         });
         if (res?.settings) {
           state.aiChat.settings = res.settings;
         }
-        const curVal =
-          document.getElementById("geminiModelSelect")?.value ||
-          "gemini-2.5-flash";
-        populateMainGeminiModelSelect(curVal, res?.models || []);
+        const models = res?.models || [];
+        const curVal = getSelectedSystemAiModelValue(provider);
+        const chosen =
+          models.length > 0 && !models.includes(curVal) ? models[0] : curVal;
+        populateMainSystemModelSelect(provider, chosen, models);
         showToast(
-          `Đã tải ${res?.models?.length || 0} model Gemini từ API!`,
+          `Đã tải ${models.length} model ${getProviderLabel(provider)} từ API!`,
           "success"
         );
       } catch (err) {
-        showToast(err.message || "Không tải được danh sách model Gemini", "error");
+        showToast(
+          err.message ||
+            `Không tải được danh sách model ${getProviderLabel(provider)}`,
+          "error"
+        );
       } finally {
         btn.disabled = false;
         btn.textContent = prev;
@@ -2775,7 +3010,13 @@ window.addEventListener("DOMContentLoaded", async () => {
         state.geminiSettings.portalHomeUrl ||
         "https://vpdt.angiang.gov.vn"
       ).trim();
+      syncCurrentSystemAiDraftFromInputs();
+      const activeProv =
+        document.getElementById("systemAiProviderSelect")?.value || "gemini";
+      const draftProviders = state.systemAiDraftProviders || {};
       const updated = await window.appApi.saveGeminiSettings({
+        aiProvider: activeProv,
+        aiProviders: draftProviders,
         iofficeUrl: ioUrl,
         portalHomeUrl: ioUrl || state.geminiSettings.portalHomeUrl,
         iofficeUsername: (
@@ -2789,8 +3030,8 @@ window.addEventListener("DOMContentLoaded", async () => {
         iofficeAutoSaveOnWeb: Boolean(
           document.getElementById("chkIofficeAutoSaveOnWeb")?.checked
         ),
-        geminiApiKey: document.getElementById("geminiApiKeyInput").value,
-        geminiModel: document.getElementById("geminiModelSelect").value,
+        geminiApiKey: draftProviders.gemini?.apiKey || "",
+        geminiModel: draftProviders.gemini?.model || "gemini-2.5-flash",
         autoAnalyzeOnPick: document.getElementById("chkAutoAnalyzeOnPick").checked,
         specialistName: (
           document.getElementById("specialistNameInput")?.value || ""
@@ -2805,11 +3046,68 @@ window.addEventListener("DOMContentLoaded", async () => {
         autoSyncGoogleSheet: Boolean(
           document.getElementById("chkAutoSyncGoogleSheet")?.checked
         ),
+        nd30Settings: {
+          ...(state.geminiSettings?.nd30Settings || {}),
+          parentAgency: (
+            document.getElementById("nd30ParentAgencyInput")?.value || ""
+          ).trim(),
+          issuingAgency: (
+            document.getElementById("nd30IssuingAgencyInput")?.value || ""
+          ).trim(),
+          agencyCode: (
+            document.getElementById("nd30AgencyCodeInput")?.value || "UBND"
+          ).trim(),
+          departmentCode: (
+            document.getElementById("nd30DepartmentCodeInput")?.value || "VP"
+          ).trim(),
+          location: (
+            document.getElementById("nd30LocationInput")?.value || ""
+          ).trim(),
+          nextDocNumber: Math.max(
+            1,
+            Number.parseInt(
+              document.getElementById("nd30NextDocNumInput")?.value || "1",
+              10
+            ) || 1
+          ),
+          signerTitle: (
+            document.getElementById("nd30SignerTitleInput")?.value || "CHỦ TỊCH"
+          ).trim(),
+          signerName: (
+            document.getElementById("nd30SignerNameInput")?.value || ""
+          ).trim(),
+          autoGenerateOnAssign: Boolean(
+            document.getElementById("chkNd30AutoGenerateOnAssign")?.checked
+          ),
+          useAiDrafting: Boolean(
+            document.getElementById("chkNd30UseAiDrafting")?.checked
+          ),
+        },
         storageConfig: {
           rootDir: document.getElementById("storageRootDirInput")?.value || "",
         },
       });
       state.geminiSettings = updated;
+      if (typeof window.appApi.saveUpdateConfig === "function") {
+        const repoEl = document.getElementById("updGithubRepoInput");
+        if (repoEl) {
+          state.update.state = await window.appApi.saveUpdateConfig({
+            githubRepo: repoEl.value || "",
+            githubToken:
+              document.getElementById("updGithubTokenInput")?.value || "",
+            autoCheckUpdates: Boolean(
+              document.getElementById("chkUpdAutoCheck")?.checked
+            ),
+            autoInstallUpdates: Boolean(
+              document.getElementById("chkUpdAutoInstall")?.checked
+            ),
+            includePrerelease: Boolean(
+              document.getElementById("chkUpdIncludePre")?.checked
+            ),
+          });
+          renderUpdateHeaderPill();
+        }
+      }
       updateGeminiHeaderBadge();
       updateDepartmentFilterDropdown();
       if (typeof window.appApi.getAiChatState === "function") {
@@ -3058,14 +3356,89 @@ window.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
+  // Calendar picker buttons & sync for Vietnamese dd/mm/yyyy date inputs
+  document.querySelectorAll(".vn-picker-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const targetId = btn.dataset.pickerTarget;
+      const picker = document.getElementById(targetId);
+      if (!picker) return;
+      if (targetId === "docReceivedDatePicker") {
+        const iso = vnDateToIso(document.getElementById("docReceivedDateInput")?.value || "");
+        if (iso) picker.value = iso;
+      } else if (targetId === "docDueDatePicker") {
+        const iso = vnDateTimeToIso(document.getElementById("docDueDateInput")?.value || "");
+        if (iso) picker.value = iso.slice(0, 16);
+      }
+      if (typeof picker.showPicker === "function") {
+        try {
+          picker.showPicker();
+          return;
+        } catch (_) {}
+      }
+      picker.click();
+    });
+  });
+
+  document
+    .getElementById("docReceivedDatePicker")
+    ?.addEventListener("change", (e) => {
+      if (e.target.value) {
+        document.getElementById("docReceivedDateInput").value = isoDateToVn(
+          e.target.value
+        );
+      }
+    });
+
+  document
+    .getElementById("docDueDatePicker")
+    ?.addEventListener("change", (e) => {
+      if (e.target.value) {
+        document.getElementById("docDueDateInput").value = isoDateTimeToVn(
+          e.target.value
+        );
+      }
+    });
+
   // Save Document Form Submit
   document.getElementById("docForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const saveBtn = document.getElementById("btnSaveDoc");
+    const rawReceived =
+      document.getElementById("docReceivedDateInput")?.value || "";
+    const rawDue = document.getElementById("docDueDateInput")?.value || "";
+    const parsedReceivedIso = rawReceived.trim()
+      ? vnDateToIso(rawReceived)
+      : "";
+    const parsedDueIso = vnDateTimeToIso(rawDue);
+
+    if (rawReceived.trim() && parsedReceivedIso === null) {
+      showToast(
+        "Ngày nhận văn bản chưa đúng định dạng dd/mm/yyyy (VD: 25/11/2026).",
+        "error"
+      );
+      document.getElementById("docReceivedDateInput")?.focus();
+      return;
+    }
+    if (!parsedDueIso) {
+      showToast(
+        "Hạn xử lý (Deadline) chưa đúng định dạng dd/mm/yyyy HH:mm (VD: 08/12/2026 17:00).",
+        "error"
+      );
+      document.getElementById("docDueDateInput")?.focus();
+      return;
+    }
+
     saveBtn.disabled = true;
     saveBtn.textContent = "⏳ Đang lưu...";
 
     try {
+      const autoGenNd30 = Boolean(
+        document.getElementById("chkAutoGenerateNd30")?.checked
+      );
+      if (autoGenNd30) {
+        saveBtn.textContent = "⏳ Đang lưu & tạo CV NĐ 30...";
+      }
+
       const payload = {
         id: document.getElementById("docIdInput").value || null,
         docNumber: document.getElementById("docNumberInput").value,
@@ -3074,17 +3447,22 @@ window.addEventListener("DOMContentLoaded", async () => {
         specialistName:
           document.getElementById("docSpecialistInput")?.value || "",
         title: document.getElementById("docTitleInput").value,
-        receivedDate: document.getElementById("docReceivedDateInput").value,
-        dueDate: document.getElementById("docDueDateInput").value,
+        receivedDate: parsedReceivedIso,
+        dueDate: parsedDueIso,
         priority: document.getElementById("docPriorityInput").value,
         notes: document.getElementById("docNotesInput").value,
         status: document.getElementById("docStatusInput").value,
         completionNote: document.getElementById("docCompletionNoteInput").value,
         assignees: state.formAssignees,
         attachments: state.formAttachments,
+        autoGenerateNd30: autoGenNd30,
+        forceGenerateNd30: autoGenNd30,
       };
 
       const savedDoc = await window.appApi.saveDocument(payload);
+      if (autoGenNd30) {
+        state.geminiSettings = await window.appApi.getGeminiSettings();
+      }
 
       const existingIdx = state.documents.findIndex((d) => d.id === savedDoc.id);
       if (existingIdx >= 0) {
@@ -3103,6 +3481,11 @@ window.addEventListener("DOMContentLoaded", async () => {
         showToast(
           `Đã lưu văn bản ${savedDoc.docNumber}, nhưng lỗi đồng bộ Sheet: ${savedDoc.sheetSyncError}`,
           "info"
+        );
+      } else if (savedDoc.nd30GeneratedDocPath && autoGenNd30) {
+        showToast(
+          `📜 Đã lưu & tạo Công văn Giao việc NĐ 30/2020 cho ${savedDoc.docNumber || "nhiệm vụ"}!`,
+          "success"
         );
       } else if (savedDoc.sheetSyncedAt && state.geminiSettings?.googleSheetWebhookUrl) {
         showToast(
@@ -3490,7 +3873,7 @@ window.addEventListener("DOMContentLoaded", async () => {
         "Vui lòng nhập URL Web App Google Apps Script trong Cài đặt trước khi đồng bộ.",
         "info"
       );
-      openGeminiSettingsModal();
+      openGeminiSettingsModal("gsheet");
       setTimeout(() => {
         document
           .getElementById("googleSheetSettingsSection")
@@ -3567,7 +3950,7 @@ window.addEventListener("DOMContentLoaded", async () => {
         "Chưa có URL Web App Google Apps Script. Hãy cài đặt và dán URL vào mục 4 trong Cài đặt.",
         "info"
       );
-      openGeminiSettingsModal();
+      openGeminiSettingsModal("gsheet");
       setTimeout(() => {
         document
           .getElementById("googleSheetSettingsSection")
@@ -3585,6 +3968,25 @@ window.addEventListener("DOMContentLoaded", async () => {
   };
 
   document
+    .getElementById("btnImportNd30FromAddIn")
+    ?.addEventListener("click", async () => {
+      try {
+        const res = await window.appApi.importNd30AddInSettings();
+        if (res?.settings) {
+          populateNd30SettingsInputs(res.settings);
+          showToast(
+            res.found
+              ? "Đã nạp cấu hình chuẩn NĐ 30/2020 từ Word Add-in!"
+              : "Không tìm thấy settings.xml của Add-in, đã nạp giá trị mặc định.",
+            res.found ? "success" : "info"
+          );
+        }
+      } catch (err) {
+        showToast(err.message || "Không nạp được cấu hình Add-in", "error");
+      }
+    });
+
+  document
     .getElementById("btnOpenAppsScriptDashboard")
     ?.addEventListener("click", openDashboardHandler);
   document
@@ -3597,12 +3999,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   });
 
   document.getElementById("btnDashGoToSettings")?.addEventListener("click", () => {
-    openGeminiSettingsModal();
-    setTimeout(() => {
-      document
-        .getElementById("googleSheetSettingsSection")
-        ?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 80);
+    openGeminiSettingsModal("gsheet");
   });
 
   document
@@ -3771,6 +4168,29 @@ window.addEventListener("DOMContentLoaded", async () => {
       }
     });
 });
+
+window.generateNd30DocForTask = async function (docId) {
+  try {
+    showToast("📜 Đang tạo Công văn Giao việc chuẩn Nghị định 30/2020...", "info");
+    const res = await window.appApi.generateNd30AssignmentDoc({
+      docId,
+      useAi: true,
+      openAfter: true,
+    });
+    if (res?.doc) {
+      const idx = state.documents.findIndex((d) => d.id === docId);
+      if (idx >= 0) state.documents[idx] = res.doc;
+      renderTabsAndDocuments();
+    }
+    state.geminiSettings = await window.appApi.getGeminiSettings();
+    showToast(
+      `✅ Đã tạo & mở Công văn: ${res?.attachment?.name || "CongVan_GiaoViec.docx"}`,
+      "success"
+    );
+  } catch (err) {
+    showToast(err.message || "Lỗi tạo Công văn Giao việc NĐ 30/2020", "error");
+  }
+};
 
 async function syncSingleDocToSheet(docId) {
   if (!state.geminiSettings?.googleSheetWebhookUrl) {
@@ -4316,6 +4736,7 @@ function getProviderLabel(provider) {
     openai: "ChatGPT / OpenAI",
     claude: "Claude",
     deepseek: "DeepSeek",
+    gateway: "AI Gateway (AI STAR)",
     ollama: "Ollama",
   };
   return map[provider] || provider || "AI";
@@ -4334,31 +4755,172 @@ function getCombinedModelsForProvider(provider, currentModel = "") {
   return Array.from(new Set(combined));
 }
 
-function populateMainGeminiModelSelect(selectedModel = "gemini-2.5-flash", loadedList = []) {
+const SYSTEM_AI_UI_META = {
+  gemini: {
+    keyLabel: "Gemini API Key",
+    keyPlaceholder: "Nhập mã API Key từ Google AI Studio (AIzaSy...)",
+    defaultBaseUrl: "https://generativelanguage.googleapis.com",
+    hideBaseUrl: true,
+    defaultModel: "gemini-2.5-flash",
+    presets: [
+      { id: "gemini-2.5-flash", label: "⚡ gemini-2.5-flash (Khuyên dùng - Nhanh & Đọc PDF/OCR rất chuẩn)" },
+      { id: "gemini-2.5-pro", label: "🧠 gemini-2.5-pro (Chuyên sâu cho văn bản dài & phức tạp)" },
+      { id: "gemini-2.0-flash", label: "🚀 gemini-2.0-flash (Tốc độ phản hồi cực nhanh)" },
+    ],
+    hint: "Lấy mã tại <code>https://aistudio.google.com/apikey</code>. Hỗ trợ đọc PDF scan, ảnh, Word, trang web iOffice & đồng bộ Chatbox AI.",
+  },
+  openai: {
+    keyLabel: "OpenAI / ChatGPT API Key",
+    keyPlaceholder: "sk-... (hoặc key của API tương thích OpenAI)",
+    defaultBaseUrl: "https://api.openai.com/v1",
+    hideBaseUrl: false,
+    defaultModel: "gpt-4o-mini",
+    presets: [
+      { id: "gpt-4o-mini", label: "⚡ gpt-4o-mini (Nhanh, tiết kiệm)" },
+      { id: "gpt-4o", label: "🧠 gpt-4o (Mạnh mẽ, đọc ảnh & trang web tốt)" },
+      { id: "gpt-4.1-mini", label: "🚀 gpt-4.1-mini" },
+      { id: "gpt-4.1", label: "🌟 gpt-4.1" },
+    ],
+    hint: "Giữ Base URL mặc định <code>https://api.openai.com/v1</code> (hoặc đổi nếu dùng proxy tương thích). Lưu ý: đọc tệp Word/Ảnh/Web trực tiếp; riêng PDF scan nên dùng Gemini hoặc Claude.",
+  },
+  claude: {
+    keyLabel: "Anthropic Claude API Key",
+    keyPlaceholder: "sk-ant-...",
+    defaultBaseUrl: "https://api.anthropic.com",
+    hideBaseUrl: false,
+    defaultModel: "claude-sonnet-4-20250514",
+    presets: [
+      { id: "claude-sonnet-4-20250514", label: "🧠 claude-sonnet-4-20250514 (Khuyên dùng)" },
+      { id: "claude-3-7-sonnet-latest", label: "✨ claude-3-7-sonnet-latest" },
+      { id: "claude-3-5-haiku-latest", label: "⚡ claude-3-5-haiku-latest (Nhanh)" },
+    ],
+    hint: "Giữ Base URL mặc định <code>https://api.anthropic.com</code> (không thêm /v1 ở cuối). Hỗ trợ đọc PDF, ảnh, Word và trang web iOffice.",
+  },
+  deepseek: {
+    keyLabel: "DeepSeek API Key",
+    keyPlaceholder: "sk-...",
+    defaultBaseUrl: "https://api.deepseek.com/v1",
+    hideBaseUrl: false,
+    defaultModel: "deepseek-chat",
+    presets: [
+      { id: "deepseek-chat", label: "🐋 deepseek-chat (Khuyên dùng - Nhanh & chuẩn JSON)" },
+      { id: "deepseek-reasoner", label: "🧠 deepseek-reasoner (Suy luận sâu)" },
+    ],
+    hint: "Giữ Base URL mặc định <code>https://api.deepseek.com/v1</code> và dán API Key vào. Lưu ý: DeepSeek hỗ trợ đọc Word (.docx), Text, nội dung Web & soạn Công văn NĐ 30; không đọc trực tiếp file PDF scan/ảnh.",
+  },
+  gateway: {
+    keyLabel: "API Key (AI Gateway / AI STAR)",
+    keyPlaceholder: "sk-ant-api03-... hoặc sk-...",
+    defaultBaseUrl: "https://ai.starimg.ru/v1",
+    hideBaseUrl: false,
+    defaultModel: "gemini-3.8-flash",
+    presets: [
+      { id: "gemini-3.8-flash", label: "⚡ gemini-3.8-flash (Google Gemini trên AI STAR)" },
+      { id: "gemini-3.1-pro", label: "🧠 gemini-3.1-pro (Google Gemini Pro trên AI STAR)" },
+      { id: "claude-sonnet-5", label: "✨ claude-sonnet-5 (Anthropic trên AI STAR)" },
+      { id: "claude-opus-5", label: "🌟 claude-opus-5 (Anthropic Opus trên AI STAR)" },
+      { id: "gpt-5.6-sol", label: "🤖 gpt-5.6-sol (OpenAI trên AI STAR)" },
+      { id: "deepseek-v4-pro-0813", label: "🐋 deepseek-v4-pro-0813 (DeepSeek trên AI STAR)" },
+    ],
+    hint: "Dán API Key và Base URL của gateway bên thứ 3 (mặc định <code>https://ai.starimg.ru/v1</code>). Hỗ trợ đọc PDF (kể cả bản scan/ký số), Ảnh, Word, trang Web iOffice & tự động đồng bộ Chatbox AI; bấm <b>🔄 Tải DS Model</b> để lấy danh sách model thực tế.",
+  },
+};
+
+function getSelectedSystemAiModelValue(provider) {
   const sel = document.getElementById("geminiModelSelect");
+  const custom = document.getElementById("systemAiCustomModelInput");
+  const def = SYSTEM_AI_UI_META[provider]?.defaultModel || "gemini-2.5-flash";
+  if (sel && sel.value === "__custom__") {
+    return (custom?.value || "").trim() || def;
+  }
+  return (sel?.value || "").trim() || def;
+}
+
+function syncCurrentSystemAiDraftFromInputs() {
+  if (!state.systemAiDraftProviders) return;
+  const prov = state.systemAiActiveDraftProvider || "gemini";
+  const meta = SYSTEM_AI_UI_META[prov] || SYSTEM_AI_UI_META.gemini;
+  state.systemAiDraftProviders[prov] = {
+    baseUrl:
+      (document.getElementById("systemAiBaseUrlInput")?.value || "").trim() ||
+      meta.defaultBaseUrl,
+    apiKey: (document.getElementById("geminiApiKeyInput")?.value || "").trim(),
+    model: getSelectedSystemAiModelValue(prov),
+  };
+}
+
+function renderSystemAiProviderFields(provider) {
+  const prov = SYSTEM_AI_UI_META[provider] ? provider : "gemini";
+  const meta = SYSTEM_AI_UI_META[prov];
+  const draft = state.systemAiDraftProviders?.[prov] || {};
+
+  const baseGroup = document.getElementById("systemAiBaseUrlGroup");
+  const baseInput = document.getElementById("systemAiBaseUrlInput");
+  const keyLabel = document.getElementById("systemAiKeyLabel");
+  const keyInput = document.getElementById("geminiApiKeyInput");
+  const hintEl = document.getElementById("systemAiHintText");
+
+  if (baseGroup) baseGroup.classList.toggle("hidden", Boolean(meta.hideBaseUrl));
+  if (baseInput) {
+    baseInput.value = draft.baseUrl || meta.defaultBaseUrl;
+    baseInput.placeholder = meta.defaultBaseUrl;
+  }
+  if (keyLabel) keyLabel.textContent = meta.keyLabel;
+  if (keyInput) {
+    keyInput.value = draft.apiKey || "";
+    keyInput.placeholder = meta.keyPlaceholder;
+  }
+  if (hintEl) hintEl.innerHTML = meta.hint;
+
+  const loaded = state.aiChat.settings?.loadedModels?.[prov] || [];
+  populateMainSystemModelSelect(
+    prov,
+    draft.model || meta.defaultModel,
+    loaded
+  );
+}
+
+function populateMainSystemModelSelect(provider, selectedModel, loadedList = []) {
+  const sel = document.getElementById("geminiModelSelect");
+  const customEl = document.getElementById("systemAiCustomModelInput");
   if (!sel) return;
-  const presets = [
-    { id: "gemini-2.5-flash", label: "⚡ gemini-2.5-flash (Khuyên dùng - Nhanh & Đọc PDF/OCR rất chuẩn)" },
-    { id: "gemini-2.5-pro", label: "🧠 gemini-2.5-pro (Chuyên sâu cho văn bản dài & phức tạp)" },
-    { id: "gemini-2.0-flash", label: "🚀 gemini-2.0-flash (Tốc độ phản hồi cực nhanh)" },
-  ];
+  const meta = SYSTEM_AI_UI_META[provider] || SYSTEM_AI_UI_META.gemini;
+  const presets = meta.presets || [];
   const presetMap = new Map(presets.map((p) => [p.id, p.label]));
   const allIds = Array.from(
-    new Set([
-      ...presets.map((p) => p.id),
-      ...(Array.isArray(loadedList) ? loadedList : []),
-      selectedModel,
-    ].filter(Boolean))
-  );
-  sel.innerHTML = allIds
-    .map(
-      (id) =>
-        `<option value="${escapeHtml(id)}">${escapeHtml(
-          presetMap.get(id) || id
-        )}</option>`
+    new Set(
+      [
+        ...presets.map((p) => p.id),
+        ...(Array.isArray(loadedList) ? loadedList : []),
+        selectedModel,
+      ].filter(Boolean)
     )
-    .join("");
-  if (selectedModel) sel.value = selectedModel;
+  );
+  sel.innerHTML =
+    allIds
+      .map(
+        (id) =>
+          `<option value="${escapeHtml(id)}">${escapeHtml(
+            presetMap.get(id) || id
+          )}</option>`
+      )
+      .join("") + `<option value="__custom__">✏️ Nhập tên model khác...</option>`;
+
+  const target = selectedModel || meta.defaultModel;
+  if (target && allIds.includes(target)) {
+    sel.value = target;
+    customEl?.classList.add("hidden");
+  } else if (target) {
+    sel.value = "__custom__";
+    if (customEl) {
+      customEl.value = target;
+      customEl.classList.remove("hidden");
+    }
+  }
+}
+
+function populateMainGeminiModelSelect(selectedModel = "gemini-2.5-flash", loadedList = []) {
+  populateMainSystemModelSelect("gemini", selectedModel, loadedList);
 }
 
 function syncModelDatalistForProvider(provider, currentModel = "") {
@@ -4904,6 +5466,14 @@ const PROVIDER_MODEL_FIELD_MAP = {
     baseUrlId: "aiCfgDeepSeekBaseUrl",
     statusId: "aiCfgModelStatus_deepseek",
   },
+  gateway: {
+    inputId: "aiCfgGatewayModel",
+    selectId: "aiCfgModelSelect_gateway",
+    datalistId: "gatewayPresetModelsList",
+    keyId: "aiCfgGatewayKey",
+    baseUrlId: "aiCfgGatewayBaseUrl",
+    statusId: "aiCfgModelStatus_gateway",
+  },
   ollama: {
     inputId: "aiCfgOllamaModel",
     selectId: "aiCfgModelSelect_ollama",
@@ -4995,6 +5565,13 @@ function openAiChatSettingsModal() {
   document.getElementById("aiCfgDeepSeekKey").value = cfg.deepseek?.apiKey || "";
   document.getElementById("aiCfgDeepSeekModel").value = deepSeekModel;
   syncProviderSettingsModelUI("deepseek", deepSeekModel);
+
+  const gatewayModel = cfg.gateway?.model || "gemini-3.8-flash";
+  document.getElementById("aiCfgGatewayBaseUrl").value =
+    cfg.gateway?.baseUrl || "https://ai.starimg.ru/v1";
+  document.getElementById("aiCfgGatewayKey").value = cfg.gateway?.apiKey || "";
+  document.getElementById("aiCfgGatewayModel").value = gatewayModel;
+  syncProviderSettingsModelUI("gateway", gatewayModel);
 
   const ollamaModel = cfg.ollama?.model || "llama3.2";
   document.getElementById("aiCfgOllamaBaseUrl").value =
@@ -5581,6 +6158,11 @@ async function initAiChatModule() {
             apiKey: document.getElementById("aiCfgDeepSeekKey").value,
             model: readModelVal("deepseek") || "deepseek-chat",
           },
+          gateway: {
+            baseUrl: document.getElementById("aiCfgGatewayBaseUrl").value,
+            apiKey: document.getElementById("aiCfgGatewayKey").value,
+            model: readModelVal("gateway") || "gemini-3.8-flash",
+          },
           ollama: {
             baseUrl: document.getElementById("aiCfgOllamaBaseUrl").value,
             model: readModelVal("ollama") || "llama3.2",
@@ -5600,12 +6182,10 @@ async function initAiChatModule() {
 
 // ==================== VERSION MANAGER & GITHUB AUTO-UPDATE ====================
 function renderUpdateHeaderPill() {
-  const pillBtn = document.getElementById("btnOpenUpdateModal");
-  const verText = document.getElementById("appVersionText");
-  const dotEl = document.getElementById("appUpdateDot");
+  const settingsBtn = document.getElementById("btnOpenGeminiSettings");
+  const tabDotEl = document.getElementById("settingsUpdateTabDot");
   const st = state.update.state;
   const live = state.update.liveStatus;
-  if (!pillBtn || !verText) return;
 
   const curVer = st?.currentVersion || "1.0.0";
   const hasUpdate = Boolean(
@@ -5614,16 +6194,11 @@ function renderUpdateHeaderPill() {
   const latestVer =
     live?.latestVersion || st?.lastCheckResult?.latestRelease?.version || "";
 
-  if (hasUpdate && latestVer) {
-    verText.textContent = `🆕 v${latestVer}`;
-    pillBtn.classList.add("has-update");
-    pillBtn.title = `Có bản mới v${latestVer} trên GitHub (hiện tại v${curVer}) - Nhấn để cập nhật`;
-    dotEl?.classList.remove("hidden");
-  } else {
-    verText.textContent = `v${curVer}`;
-    pillBtn.classList.remove("has-update");
-    pillBtn.title = `zOffice v${curVer} - Quản lý phiên bản & cập nhật GitHub`;
-    dotEl?.classList.add("hidden");
+  if (tabDotEl) {
+    tabDotEl.classList.toggle("hidden", !hasUpdate);
+  }
+  if (settingsBtn && hasUpdate && latestVer) {
+    settingsBtn.title = `Cài đặt hệ thống (Có bản cập nhật mới v${latestVer}, hiện tại v${curVer})`;
   }
 }
 
@@ -5645,6 +6220,7 @@ function renderUpdateModal() {
   const repoEl = document.getElementById("updGithubRepoInput");
   const tokenEl = document.getElementById("updGithubTokenInput");
   const autoChkEl = document.getElementById("chkUpdAutoCheck");
+  const autoInstallEl = document.getElementById("chkUpdAutoInstall");
   const preChkEl = document.getElementById("chkUpdIncludePre");
   if (repoEl && document.activeElement !== repoEl) {
     repoEl.value = st.githubRepo || "";
@@ -5653,6 +6229,7 @@ function renderUpdateModal() {
     tokenEl.value = st.githubToken || "";
   }
   if (autoChkEl) autoChkEl.checked = st.autoCheckUpdates !== false;
+  if (autoInstallEl) autoInstallEl.checked = st.autoInstallUpdates !== false;
   if (preChkEl) preChkEl.checked = Boolean(st.includePrerelease);
 
   const checkRes = st.lastCheckResult;
@@ -5736,7 +6313,9 @@ function renderUpdateModal() {
   const progText = document.getElementById("updProgressText");
   if (progWrap && progBar && progText) {
     const showProg =
-      live?.phase === "downloading" || live?.phase === "installing";
+      live?.phase === "auto-updating" ||
+      live?.phase === "downloading" ||
+      live?.phase === "installing";
     progWrap.classList.toggle("hidden", !showProg);
     if (showProg) {
       progBar.style.width = `${live.percent ?? 20}%`;
@@ -5812,23 +6391,18 @@ async function initUpdateModule() {
     } catch (_) {}
     renderUpdateHeaderPill();
     renderUpdateModal();
-    if (status?.phase === "available") {
+    if (status?.phase === "auto-updating") {
+      showToast(
+        `🔄 Phát hiện zOffice v${status.latestVersion} — đang tự động tải & cài đặt cập nhật...`,
+        "info"
+      );
+    } else if (status?.phase === "available" && state.update.state?.autoInstallUpdates === false) {
       showToast(
         `🎉 zOffice có bản mới v${status.latestVersion} trên GitHub!`,
         "info"
       );
     }
   });
-
-  document
-    .getElementById("btnOpenUpdateModal")
-    ?.addEventListener("click", async () => {
-      try {
-        state.update.state = await window.appApi.getUpdateState();
-      } catch (_) {}
-      renderUpdateModal();
-      document.getElementById("updateManagerModal")?.classList.remove("hidden");
-    });
 
   document
     .getElementById("btnSaveUpdateConfig")
@@ -5840,6 +6414,9 @@ async function initUpdateModule() {
             document.getElementById("updGithubTokenInput")?.value || "",
           autoCheckUpdates: Boolean(
             document.getElementById("chkUpdAutoCheck")?.checked
+          ),
+          autoInstallUpdates: Boolean(
+            document.getElementById("chkUpdAutoInstall")?.checked
           ),
           includePrerelease: Boolean(
             document.getElementById("chkUpdIncludePre")?.checked
@@ -5867,6 +6444,9 @@ async function initUpdateModule() {
             document.getElementById("updGithubTokenInput")?.value || "",
           autoCheckUpdates: Boolean(
             document.getElementById("chkUpdAutoCheck")?.checked
+          ),
+          autoInstallUpdates: Boolean(
+            document.getElementById("chkUpdAutoInstall")?.checked
           ),
           includePrerelease: Boolean(
             document.getElementById("chkUpdIncludePre")?.checked

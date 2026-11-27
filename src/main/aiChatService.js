@@ -3,7 +3,7 @@ const fsp = require("node:fs/promises");
 const path = require("node:path");
 const http = require("node:http");
 const https = require("node:https");
-const { extractTextFromDocxBuffer } = require("./geminiService");
+const { extractTextFromDocxBuffer, renderPdfToPngPages } = require("./geminiService");
 
 const COPILOT_PRESETS = [
   {
@@ -80,6 +80,20 @@ const PROVIDER_CATALOG = {
     defaultModel: "deepseek-chat",
     defaultBaseUrl: "https://api.deepseek.com/v1",
     models: ["deepseek-chat", "deepseek-reasoner"],
+  },
+  gateway: {
+    id: "gateway",
+    label: "AI Gateway / Proxy (AI STAR)",
+    defaultModel: "gemini-3.8-flash",
+    defaultBaseUrl: "https://ai.starimg.ru/v1",
+    models: [
+      "gemini-3.8-flash",
+      "gemini-3.1-pro",
+      "claude-sonnet-5",
+      "claude-opus-5",
+      "gpt-5.6-sol",
+      "deepseek-v4-pro-0813",
+    ],
   },
   ollama: {
     id: "ollama",
@@ -160,7 +174,7 @@ function parseProviderModelsResponse(provider, parsed, baseUrl = "") {
     return unique(models);
   }
 
-  if (provider === "openai" || provider === "deepseek") {
+  if (provider === "openai" || provider === "deepseek" || provider === "gateway") {
     const rawList = Array.isArray(parsed?.data)
       ? parsed.data
       : Array.isArray(parsed?.models)
@@ -230,9 +244,17 @@ function getRequestClient(urlObj) {
   return urlObj.protocol === "http:" ? http : https;
 }
 
-function normalizeBaseUrl(raw, fallback) {
-  const s = String(raw || fallback || "").trim();
-  return s.replace(/\/+$/, "");
+function normalizeBaseUrl(raw, fallback, provider = "") {
+  let s = String(raw || fallback || "").trim().replace(/\/+$/, "");
+  if (provider === "claude") {
+    s = s.replace(/\/v1$/i, "");
+  } else if (
+    (provider === "openai" && /^https:\/\/api\.openai\.com$/i.test(s)) ||
+    (provider === "gateway" && /^https?:\/\/ai\.starimg\.ru$/i.test(s))
+  ) {
+    s = `${s}/v1`;
+  }
+  return s || String(fallback || "").trim().replace(/\/+$/, "");
 }
 
 class AiChatService {
@@ -275,6 +297,11 @@ class AiChatService {
         baseUrl: "https://api.deepseek.com/v1",
         model: "deepseek-chat",
       },
+      gateway: {
+        apiKey: "",
+        baseUrl: "https://ai.starimg.ru/v1",
+        model: "gemini-3.8-flash",
+      },
       ollama: {
         baseUrl: "http://127.0.0.1:11434",
         model: "llama3.2",
@@ -284,6 +311,7 @@ class AiChatService {
         openai: [],
         claude: [],
         deepseek: [],
+        gateway: [],
         ollama: [],
       },
     };
@@ -313,7 +341,8 @@ class AiChatService {
             ...(parsed.openai || {}),
             baseUrl: normalizeBaseUrl(
               parsed.openai?.baseUrl,
-              defaults.openai.baseUrl
+              defaults.openai.baseUrl,
+              "openai"
             ),
           },
           claude: {
@@ -321,7 +350,8 @@ class AiChatService {
             ...(parsed.claude || {}),
             baseUrl: normalizeBaseUrl(
               parsed.claude?.baseUrl,
-              defaults.claude.baseUrl
+              defaults.claude.baseUrl,
+              "claude"
             ),
           },
           deepseek: {
@@ -329,7 +359,17 @@ class AiChatService {
             ...(parsed.deepseek || {}),
             baseUrl: normalizeBaseUrl(
               parsed.deepseek?.baseUrl,
-              defaults.deepseek.baseUrl
+              defaults.deepseek.baseUrl,
+              "deepseek"
+            ),
+          },
+          gateway: {
+            ...defaults.gateway,
+            ...(parsed.gateway || {}),
+            baseUrl: normalizeBaseUrl(
+              parsed.gateway?.baseUrl,
+              defaults.gateway.baseUrl,
+              "gateway"
             ),
           },
           ollama: {
@@ -382,6 +422,10 @@ class AiChatService {
         ...this.settings.deepseek,
         ...(newSettings.deepseek || {}),
       },
+      gateway: {
+        ...this.settings.gateway,
+        ...(newSettings.gateway || {}),
+      },
       ollama: {
         ...this.settings.ollama,
         ...(newSettings.ollama || {}),
@@ -397,13 +441,15 @@ class AiChatService {
     merged.openai.apiKey = String(merged.openai.apiKey || "").trim();
     merged.openai.baseUrl = normalizeBaseUrl(
       merged.openai.baseUrl,
-      "https://api.openai.com/v1"
+      "https://api.openai.com/v1",
+      "openai"
     );
     merged.openai.model = String(merged.openai.model || "gpt-4o-mini").trim();
     merged.claude.apiKey = String(merged.claude.apiKey || "").trim();
     merged.claude.baseUrl = normalizeBaseUrl(
       merged.claude.baseUrl,
-      "https://api.anthropic.com"
+      "https://api.anthropic.com",
+      "claude"
     );
     merged.claude.model = String(
       merged.claude.model || "claude-sonnet-4-20250514"
@@ -411,10 +457,20 @@ class AiChatService {
     merged.deepseek.apiKey = String(merged.deepseek.apiKey || "").trim();
     merged.deepseek.baseUrl = normalizeBaseUrl(
       merged.deepseek.baseUrl,
-      "https://api.deepseek.com/v1"
+      "https://api.deepseek.com/v1",
+      "deepseek"
     );
     merged.deepseek.model = String(
       merged.deepseek.model || "deepseek-chat"
+    ).trim();
+    merged.gateway.apiKey = String(merged.gateway.apiKey || "").trim();
+    merged.gateway.baseUrl = normalizeBaseUrl(
+      merged.gateway.baseUrl,
+      "https://ai.starimg.ru/v1",
+      "gateway"
+    );
+    merged.gateway.model = String(
+      merged.gateway.model || "gemini-3.8-flash"
     ).trim();
     merged.ollama.baseUrl = normalizeBaseUrl(
       merged.ollama.baseUrl,
@@ -429,19 +485,47 @@ class AiChatService {
       "utf-8"
     );
 
-    // Đồng bộ Gemini API Key & Model sang GeminiService để dùng chung trong toàn bộ app
-    if (this.geminiService && newSettings.gemini) {
-      this.geminiService.saveSettings({
-        geminiApiKey: merged.gemini.apiKey,
-        geminiModel: merged.gemini.model,
-      });
+    // Đồng bộ cấu hình các nhà cung cấp AI sang GeminiService để dùng chung trong toàn bộ app
+    if (this.geminiService && !newSettings._skipSystemSync) {
+      const providerPatch = {};
+      for (const pKey of ["gemini", "openai", "claude", "deepseek", "gateway"]) {
+        if (newSettings[pKey]) {
+          providerPatch[pKey] = {
+            apiKey: merged[pKey].apiKey,
+            ...(merged[pKey].baseUrl ? { baseUrl: merged[pKey].baseUrl } : {}),
+            model: merged[pKey].model,
+          };
+        }
+      }
+      if (Object.keys(providerPatch).length > 0) {
+        this.geminiService.saveSettings({
+          ...(providerPatch.gemini
+            ? {
+                geminiApiKey: providerPatch.gemini.apiKey,
+                geminiModel: providerPatch.gemini.model,
+              }
+            : {}),
+          aiProviders: providerPatch,
+        });
+      }
     }
 
     return this.getPublicSettings();
   }
 
   getPublicSettings() {
-    // Luôn ưu tiên đồng bộ nếu user vừa đổi API key ở Cài đặt AI Gemini chung
+    // Luôn ưu tiên đồng bộ nếu user vừa đổi API key ở Cài đặt hệ thống chung
+    const sysProviders = this.geminiService?.settings?.aiProviders || {};
+    for (const pKey of ["gemini", "openai", "claude", "deepseek", "gateway"]) {
+      const sysKey = String(sysProviders[pKey]?.apiKey || "").trim();
+      if (sysKey && sysKey !== this.settings[pKey]?.apiKey) {
+        this.settings[pKey].apiKey = sysKey;
+      }
+      const sysBaseUrl = String(sysProviders[pKey]?.baseUrl || "").trim();
+      if (sysBaseUrl && this.settings[pKey] && "baseUrl" in this.settings[pKey] && sysBaseUrl !== this.settings[pKey].baseUrl) {
+        this.settings[pKey].baseUrl = sysBaseUrl;
+      }
+    }
     const sharedGemKey = String(
       this.geminiService?.settings?.geminiApiKey || ""
     ).trim();
@@ -941,7 +1025,7 @@ class AiChatService {
           streamId,
           onDelta: emitDelta,
         });
-      } else if (provider === "openai" || provider === "deepseek") {
+      } else if (provider === "openai" || provider === "deepseek" || provider === "gateway") {
         await this.streamOpenAICompat({
           providerKey: provider,
           model,
@@ -1189,19 +1273,15 @@ class AiChatService {
     streamId,
     onDelta,
   }) {
-    const isDeepSeek = providerKey === "deepseek";
-    const defaultUrl = isDeepSeek
-      ? "https://api.deepseek.com/v1"
-      : "https://api.openai.com/v1";
-    const defaultModel = isDeepSeek ? "deepseek-chat" : "gpt-4o-mini";
+    const catalog = PROVIDER_CATALOG[providerKey] || PROVIDER_CATALOG.openai;
+    const defaultUrl = catalog.defaultBaseUrl;
+    const defaultModel = catalog.defaultModel;
     const cfg = this.settings[providerKey] || {};
     const apiKey = String(cfg.apiKey || "").trim();
-    const baseUrl = normalizeBaseUrl(cfg.baseUrl, defaultUrl);
+    const baseUrl = normalizeBaseUrl(cfg.baseUrl, defaultUrl, providerKey);
     if (!apiKey) {
       throw new Error(
-        `Chưa nhập API Key cho ${
-          isDeepSeek ? "DeepSeek" : "ChatGPT / OpenAI"
-        }! Hãy vào '⚙️ Cài đặt Model & API'.`
+        `Chưa nhập API Key cho ${catalog.label}! Hãy vào '⚙️ Cài đặt Model & API'.`
       );
     }
 
@@ -1210,18 +1290,45 @@ class AiChatService {
       messages.push({ role: "system", content: systemPrompt });
     }
 
+    const supportsVision = providerKey === "openai" || providerKey === "gateway";
     for (const m of history) {
-      const hasImage = (m.attachments || []).some((a) => a.kind === "image");
-      const textAdditions = (m.attachments || [])
-        .map((a) => {
-          if (a.kind === "text") return a.text;
-          if (a.kind === "pdf") {
-            return `[Đã đính kèm PDF "${a.name}". Lưu ý: API OpenAI-compatible không đọc PDF nhị phân trực tiếp như Gemini; hãy chuyển sang model Gemini để đọc PDF scan/ký số trực tiếp.]`;
+      const renderedPdfImages = [];
+      const fallbackPdfNotes = [];
+      if (m.role === "user") {
+        for (const a of m.attachments || []) {
+          if (a.kind === "pdf" && a.base64) {
+            if (supportsVision) {
+              const pages = await renderPdfToPngPages(
+                Buffer.from(a.base64, "base64"),
+                { maxPages: 3, destinationWidth: 1200 }
+              );
+              if (pages.length > 0) {
+                for (const pg of pages) {
+                  renderedPdfImages.push({
+                    label: `[Tệp PDF "${a.name}" - Trang ${pg.pageNumber}/${pg.totalPages}]`,
+                    mimeType: "image/png",
+                    base64: pg.base64,
+                  });
+                }
+                continue;
+              }
+            }
+            fallbackPdfNotes.push(
+              `[Đã đính kèm PDF "${a.name}". Lưu ý: API OpenAI-compatible không đọc PDF nhị phân trực tiếp nếu không chuyển được sang ảnh.]`
+            );
           }
-          return "";
-        })
-        .filter(Boolean)
-        .join("\n\n");
+        }
+      }
+
+      const hasImage =
+        (m.attachments || []).some((a) => a.kind === "image") ||
+        renderedPdfImages.length > 0;
+      const textAdditions = [
+        ...(m.attachments || [])
+          .map((a) => (a.kind === "text" ? a.text : ""))
+          .filter(Boolean),
+        ...fallbackPdfNotes,
+      ].join("\n\n");
 
       const combinedText = [m.text, textAdditions].filter(Boolean).join("\n\n");
 
@@ -1237,6 +1344,13 @@ class AiChatService {
               image_url: { url: `data:${a.mimeType};base64,${a.base64}` },
             });
           }
+        }
+        for (const pg of renderedPdfImages) {
+          contentParts.push({ type: "text", text: pg.label });
+          contentParts.push({
+            type: "image_url",
+            image_url: { url: `data:${pg.mimeType};base64,${pg.base64}` },
+          });
         }
         messages.push({ role: "user", content: contentParts });
       } else {
@@ -1423,19 +1537,18 @@ class AiChatService {
         key
       )}`;
       parsed = await requestJsonGet(url);
-    } else if (prov === "openai" || prov === "deepseek") {
-      const isDeepSeek = prov === "deepseek";
+    } else if (prov === "openai" || prov === "deepseek" || prov === "gateway") {
+      const catalog = PROVIDER_CATALOG[prov] || PROVIDER_CATALOG.openai;
       const cfg = this.settings[prov] || {};
       const key = String(apiKey || cfg.apiKey || "").trim();
       resolvedBaseUrl = normalizeBaseUrl(
         baseUrl || cfg.baseUrl,
-        isDeepSeek ? "https://api.deepseek.com/v1" : "https://api.openai.com/v1"
+        catalog.defaultBaseUrl,
+        prov
       );
       if (!key) {
         throw new Error(
-          `Vui lòng nhập ${
-            isDeepSeek ? "DeepSeek" : "OpenAI / ChatGPT"
-          } API Key trước khi tải danh sách model.`
+          `Vui lòng nhập ${catalog.label} API Key trước khi tải danh sách model.`
         );
       }
       parsed = await requestJsonGet(`${resolvedBaseUrl}/models`, {

@@ -11,13 +11,18 @@ const path = require("node:path");
 const fs = require("node:fs");
 const fsp = require("node:fs/promises");
 const { ZaloService } = require("./zaloService");
-const { GeminiService } = require("./geminiService");
+const { GeminiService, callGeminiRestApi } = require("./geminiService");
 const { AiChatService } = require("./aiChatService");
 const {
   GoogleSheetService,
   normalizeAppsScriptWebAppUrl,
 } = require("./googleSheetService");
 const { UpdateService } = require("./updateService");
+const {
+  Nd30DocxService,
+  DEFAULT_ND30_SETTINGS,
+  readAddInSettingsFromAppData,
+} = require("./nd30DocxService");
 
 let mainWindow = null;
 let zaloService = null;
@@ -25,6 +30,8 @@ let geminiService = null;
 let aiChatService = null;
 let googleSheetService = null;
 let updateService = null;
+let nd30DocxService = null;
+let updateSchedulerStarted = false;
 
 const DATA_DIR = path.join(app.getAppPath(), "data");
 const ATTACHMENTS_DIR = path.join(DATA_DIR, "attachments");
@@ -257,12 +264,22 @@ function sendToRenderer(channel, payload) {
 }
 
 function createWindow() {
+  const icoPath = path.join(app.getAppPath(), "z.ico");
+  const pngPath = path.join(app.getAppPath(), "z.png");
+  const windowIconPath =
+    process.platform === "win32" && fs.existsSync(icoPath)
+      ? icoPath
+      : fs.existsSync(pngPath)
+      ? pngPath
+      : icoPath;
+
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 880,
     minWidth: 1080,
     minHeight: 680,
     title: "zOffice - Quản Lý Công Việc & Văn Bản",
+    icon: fs.existsSync(windowIconPath) ? windowIconPath : undefined,
     backgroundColor: "#f1f5f9",
     autoHideMenuBar: true,
     webPreferences: {
@@ -272,6 +289,12 @@ function createWindow() {
       webviewTag: true,
     },
   });
+
+  if (fs.existsSync(windowIconPath)) {
+    try {
+      mainWindow.setIcon(windowIconPath);
+    } catch (_) {}
+  }
 
   mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
 
@@ -283,10 +306,24 @@ function createWindow() {
         await zaloService.autoLoginFromSession();
       }
     }
-    if (updateService && updateService.config?.autoCheckUpdates && updateService.config?.githubRepo) {
-      setTimeout(() => {
-        updateService.checkForUpdates({ silent: true }).catch(() => {});
-      }, 3500);
+    if (!updateSchedulerStarted && updateService) {
+      updateSchedulerStarted = true;
+      const runAutoUpdateCycle = () => {
+        if (
+          updateService?.config?.autoCheckUpdates !== false &&
+          updateService?.config?.githubRepo
+        ) {
+          updateService
+            .checkForUpdates({
+              silent: true,
+              autoInstallIfNew:
+                updateService.config?.autoInstallUpdates !== false,
+            })
+            .catch(() => {});
+        }
+      };
+      setTimeout(runAutoUpdateCycle, 3500);
+      setInterval(runAutoUpdateCycle, 30 * 60 * 1000).unref();
     }
   });
 }
@@ -404,12 +441,17 @@ async function syncDocAndPersistStatus(docId, { force = false } = {}) {
   return freshDocs[freshIdx];
 }
 
+if (process.platform === "win32" && typeof app.setAppUserModelId === "function") {
+  app.setAppUserModelId("com.zoffice.app");
+}
+
 app.whenReady().then(() => {
   ensureDirectories();
   zaloService = new ZaloService(DATA_DIR, sendToRenderer);
   geminiService = new GeminiService(DATA_DIR);
   aiChatService = new AiChatService(DATA_DIR, geminiService);
   googleSheetService = new GoogleSheetService(geminiService, app.getAppPath());
+  nd30DocxService = new Nd30DocxService(geminiService, callGeminiRestApi);
   updateService = new UpdateService(
     app,
     app.getAppPath(),
@@ -550,7 +592,19 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle("gemini:save-settings", async (_event, newSettings) => {
-    return geminiService.saveSettings(newSettings);
+    const saved = geminiService.saveSettings(newSettings);
+    if (aiChatService && (newSettings?.aiProviders || newSettings?.geminiApiKey !== undefined)) {
+      const p = saved.aiProviders || {};
+      aiChatService.saveSettings({
+        _skipSystemSync: true,
+        ...(p.gemini ? { gemini: { apiKey: p.gemini.apiKey, model: p.gemini.model } } : {}),
+        ...(p.openai ? { openai: { apiKey: p.openai.apiKey, baseUrl: p.openai.baseUrl, model: p.openai.model } } : {}),
+        ...(p.claude ? { claude: { apiKey: p.claude.apiKey, baseUrl: p.claude.baseUrl, model: p.claude.model } } : {}),
+        ...(p.deepseek ? { deepseek: { apiKey: p.deepseek.apiKey, baseUrl: p.deepseek.baseUrl, model: p.deepseek.model } } : {}),
+        ...(p.gateway ? { gateway: { apiKey: p.gateway.apiKey, baseUrl: p.gateway.baseUrl, model: p.gateway.model } } : {}),
+      });
+    }
+    return saved;
   });
 
   ipcMain.handle("gemini:analyze-file", async (_event, filePath) => {
@@ -1020,7 +1074,6 @@ app.whenReady().then(() => {
       };
       docs[idx] = updated;
       saveDocuments(docs);
-      return (await syncDocAndPersistStatus(updated.id)) || updated;
     } else {
       const newDoc = {
         id: docId,
@@ -1044,8 +1097,99 @@ app.whenReady().then(() => {
       };
       docs.unshift(newDoc);
       saveDocuments(docs);
-      return (await syncDocAndPersistStatus(newDoc.id)) || newDoc;
     }
+
+    // Bắt sự kiện giao việc -> Tự động tạo Công văn giao việc .docx chuẩn Nghị định 30/2020/NĐ-CP
+    const savedIdx = docs.findIndex((d) => d.id === docId);
+    const savedDoc = savedIdx >= 0 ? docs[savedIdx] : null;
+    if (savedDoc && nd30DocxService) {
+      const nd30Cfg = nd30DocxService.getSettings();
+      const shouldAutoGenerate =
+        docData.autoGenerateNd30 !== undefined
+          ? Boolean(docData.autoGenerateNd30)
+          : Boolean(nd30Cfg.autoGenerateOnAssign);
+      const hasAssignmentAtt = (savedDoc.attachments || []).some(
+        (a) => a.category === "assignment"
+      );
+      const isAssignmentTrigger =
+        savedDoc.status !== "completed" &&
+        (Boolean(docData.forceGenerateNd30) ||
+          !isEdit ||
+          (!hasAssignmentAtt &&
+            (savedDoc.assignees.length > 0 ||
+              Boolean(savedDoc.department) ||
+              Boolean(savedDoc.notes))));
+
+      if (shouldAutoGenerate && isAssignmentTrigger && (!hasAssignmentAtt || docData.forceGenerateNd30)) {
+        try {
+          const genRes = await nd30DocxService.generateAssignmentDocx(savedDoc, {
+            targetDir: resolveAttachmentTargetDir(savedDoc.docNumber, savedDoc.id),
+            useAi: docData.useAiNd30 !== false,
+          });
+          if (genRes?.attachment) {
+            savedDoc.attachments = [
+              ...(savedDoc.attachments || []).filter((a) => !a.generatedByNd30),
+              genRes.attachment,
+            ];
+            savedDoc.nd30GeneratedDocPath = genRes.filePath;
+            savedDoc.updatedAt = new Date().toISOString();
+            docs[savedIdx] = savedDoc;
+            saveDocuments(docs);
+          }
+        } catch (ndErr) {
+          console.warn("Auto-generate ND30 assignment docx warning:", ndErr?.message || ndErr);
+        }
+      }
+    }
+
+    return (await syncDocAndPersistStatus(docId)) || savedDoc;
+  });
+
+  ipcMain.handle(
+    "nd30:generate-for-doc",
+    async (_event, { docId, useAi = true, openAfter = false } = {}) => {
+      const docs = loadDocuments();
+      const idx = docs.findIndex((d) => d.id === docId);
+      if (idx === -1) {
+        throw new Error("Không tìm thấy công việc để tạo Công văn giao việc.");
+      }
+      const targetDoc = docs[idx];
+      const genRes = await nd30DocxService.generateAssignmentDocx(targetDoc, {
+        targetDir: resolveAttachmentTargetDir(targetDoc.docNumber, targetDoc.id),
+        useAi: Boolean(useAi),
+      });
+      targetDoc.attachments = [
+        ...(targetDoc.attachments || []).filter((a) => !a.generatedByNd30),
+        genRes.attachment,
+      ];
+      targetDoc.nd30GeneratedDocPath = genRes.filePath;
+      targetDoc.updatedAt = new Date().toISOString();
+      docs[idx] = targetDoc;
+      saveDocuments(docs);
+      const synced = (await syncDocAndPersistStatus(targetDoc.id)) || targetDoc;
+
+      if (openAfter && genRes.filePath && fs.existsSync(genRes.filePath)) {
+        await shell.openPath(genRes.filePath);
+      }
+      return {
+        success: true,
+        doc: synced,
+        attachment: genRes.attachment,
+        filePath: genRes.filePath,
+        plan: genRes.plan,
+      };
+    }
+  );
+
+  ipcMain.handle("nd30:import-addin-settings", async () => {
+    const imported = readAddInSettingsFromAppData();
+    return {
+      found: Boolean(imported),
+      settings: {
+        ...DEFAULT_ND30_SETTINGS,
+        ...(imported || {}),
+      },
+    };
   });
 
   ipcMain.handle("docs:delete", async (_event, docId) => {
