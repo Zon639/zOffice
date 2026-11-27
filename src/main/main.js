@@ -1116,6 +1116,8 @@ app.whenReady().then(() => {
     // Bắt sự kiện giao việc -> Tự động tạo Công văn giao việc .docx chuẩn Nghị định 30/2020/NĐ-CP
     const savedIdx = docs.findIndex((d) => d.id === docId);
     const savedDoc = savedIdx >= 0 ? docs[savedIdx] : null;
+    let generatedNd30FilePath = "";
+    let nd30OpenError = "";
     if (savedDoc && nd30DocxService) {
       const nd30Cfg = nd30DocxService.getSettings();
       const shouldAutoGenerate =
@@ -1146,9 +1148,22 @@ app.whenReady().then(() => {
               genRes.attachment,
             ];
             savedDoc.nd30GeneratedDocPath = genRes.filePath;
+            generatedNd30FilePath = genRes.filePath || "";
             savedDoc.updatedAt = new Date().toISOString();
             docs[savedIdx] = savedDoc;
             saveDocuments(docs);
+
+            if (
+              docData.openNd30AfterSave !== false &&
+              generatedNd30FilePath &&
+              fs.existsSync(generatedNd30FilePath)
+            ) {
+              const openErr = await shell.openPath(generatedNd30FilePath);
+              if (openErr) {
+                nd30OpenError = openErr;
+                console.warn("Auto-open ND30 assignment docx warning:", openErr);
+              }
+            }
           }
         } catch (ndErr) {
           console.warn("Auto-generate ND30 assignment docx warning:", ndErr?.message || ndErr);
@@ -1156,7 +1171,15 @@ app.whenReady().then(() => {
       }
     }
 
-    return (await syncDocAndPersistStatus(docId)) || savedDoc;
+    const finalDoc = (await syncDocAndPersistStatus(docId)) || savedDoc;
+    if (finalDoc && generatedNd30FilePath) {
+      return {
+        ...finalDoc,
+        nd30JustGenerated: true,
+        nd30OpenError,
+      };
+    }
+    return finalDoc;
   });
 
   ipcMain.handle(

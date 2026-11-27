@@ -321,6 +321,7 @@ function deriveAgencyNames(settings = {}) {
     ubndFullName = levelNoun ? `Ủy ban nhân dân ${levelNoun}` : "Ủy ban nhân dân";
   }
 
+  const ubndMediumName = levelNoun ? `Ủy ban nhân dân ${levelNoun}` : "Ủy ban nhân dân";
   const ubndShortName = levelNoun ? `UBND ${levelNoun}` : "UBND";
 
   let officePhrase = ubndShortName;
@@ -337,9 +338,141 @@ function deriveAgencyNames(settings = {}) {
     isOffice,
     levelNoun,
     ubndFullName,
+    ubndMediumName,
     ubndShortName,
     officePhrase,
   };
+}
+
+function detectIncomingDocType(docNumber = "", title = "") {
+  const num = String(docNumber || "").trim();
+  const tit = String(title || "").trim();
+  if (/\/KH[-/]/i.test(num) || /^kế hoạch\b/i.test(tit)) return "Kế hoạch";
+  if (/\/TB[-/]/i.test(num) || /^thông báo\b/i.test(tit)) return "Thông báo";
+  if (/\/GM[-/]/i.test(num) || /^giấy mời\b/i.test(tit)) return "Giấy mời";
+  if (/\/TTr[-/]/i.test(num) || /^tờ trình\b/i.test(tit)) return "Tờ trình";
+  if (/\/BC[-/]/i.test(num) || /^báo cáo\b/i.test(tit)) return "Báo cáo";
+  if (/\/QĐ[-/]/i.test(num) || /^quyết định\b/i.test(tit)) return "Quyết định";
+  return "Công văn";
+}
+
+function lowercaseFirstForClause(text) {
+  const s = String(text || "").trim();
+  if (!s) return "";
+  const firstWord = s.split(/\s+/)[0] || "";
+  if (firstWord.length >= 2 && firstWord === firstWord.toUpperCase() && /\p{L}/u.test(firstWord)) {
+    return s;
+  }
+  return s.charAt(0).toLowerCase() + s.slice(1);
+}
+
+function cleanShortActionClause(rawText, { issuerClean = "", hasDueDate = false } = {}) {
+  const rawLines = String(rawText || "")
+    .split(/\r?\n/)
+    .map((l) => l.replace(/^[-•*+\d.)\s]+/, "").trim())
+    .filter(Boolean);
+
+  const cleanedLines = [];
+  for (let line of rawLines) {
+    line = line.replace(/[.;]+$/, "").trim();
+    if (hasDueDate) {
+      line = line
+        .replace(
+          /[,;]?\s*(?:thời hạn\s*(?:hoàn thành|báo cáo|gửi)?\s*[:\-]?\s*)?(?:hoàn thành\s*)?(?:trước|chậm nhất(?:\s+là)?|hạn(?:\s+cuối)?|đến)\s*(?:(?:\d{1,2}\s*[h:]\s*\d{0,2}\s*)?ngày\s*)?\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?$/iu,
+          ""
+        )
+        .trim();
+    }
+    line = line
+      .replace(/^giao\s+[^,.;]+?\s*(?:chủ trì|phối hợp)[^.]*\.\s*/iu, "")
+      .replace(/^tham mưu\s+(?:UBND|Ủy ban nhân dân)(?:\s+(?:xã|phường|thị trấn|huyện|quận|tỉnh|thành phố))?\s*/iu, "")
+      .replace(/[.;,]+$/, "")
+      .trim();
+
+    if (!line) continue;
+    // Bỏ qua dòng chỉ nhắc chung việc "nghiên cứu nội dung công văn" vì câu trước đã nêu sẵn
+    if (/^nghiên cứu(?:\s+(?:nội dung|hồ sơ|dự thảo|văn bản|công văn))?(?:\s+nêu trên)?$/iu.test(line)) {
+      continue;
+    }
+    cleanedLines.push(lowercaseFirstForClause(line));
+  }
+
+  let chosen = "";
+  if (cleanedLines.length === 1) {
+    chosen = cleanedLines[0];
+  } else if (cleanedLines.length > 1) {
+    const actionRegex = /(tham mưu|góp ý|ý kiến|báo cáo|gửi|tổng hợp|triển khai|tổ chức|rà soát|xử lý|thực hiện|phối hợp)/iu;
+    const prioritized = cleanedLines.filter((l) => actionRegex.test(l));
+    const pool = prioritized.length > 0 ? prioritized : cleanedLines;
+    // Chọn tối đa 2 ý ngắn gọn nhất để giữ đúng bố cục súc tích của mẫu công văn
+    const selected = [];
+    let totalLen = 0;
+    for (const item of pool) {
+      if (selected.length >= 2 || (selected.length >= 1 && totalLen + item.length > 140)) break;
+      selected.push(item);
+      totalLen += item.length;
+    }
+    chosen = selected.join("; ");
+  }
+
+  if (!chosen) {
+    chosen = `tổ chức triển khai thực hiện${issuerClean ? ` và có văn bản gửi về ${issuerClean}` : ""}`;
+  }
+  return lowercaseFirstForClause(chosen).replace(/[.;]+$/, "").trim();
+}
+
+function buildTemplateBodyParagraphs({
+  doc = {},
+  agencyNames = {},
+  targetUnit = "",
+  primaryUnit = "",
+  coordNames = [],
+  incomingDocType = "Công văn",
+  aboutClause = "",
+  shortActionClause = "",
+}) {
+  const { isOffice, ubndFullName, ubndMediumName, ubndShortName, officePhrase } = agencyNames;
+  const docNumberClean = String(doc.docNumber || "").trim();
+  const issuerClean = String(doc.issuer || "").trim();
+  const receivedPhrase = doc.receivedDate ? formatReceivedDateVN(doc.receivedDate) : "";
+  const dueShort = formatDueDateShortVN(doc.dueDate);
+  const docNoun = String(incomingDocType || "Công văn").trim() || "Công văn";
+
+  const bodyParagraphs = [];
+
+  if (docNumberClean || issuerClean) {
+    const docRef = [
+      docNumberClean ? `${docNoun} số ${docNumberClean}` : docNoun,
+      receivedPhrase,
+      issuerClean ? `của ${issuerClean}` : "",
+      aboutClause,
+    ]
+      .filter(Boolean)
+      .join(" ");
+    bodyParagraphs.push(`${ubndFullName} nhận được ${docRef}.`);
+    bodyParagraphs.push(`Về vấn đề này, ${ubndMediumName} có ý kiến như sau:`);
+  } else {
+    bodyParagraphs.push(
+      `Về nhiệm vụ${aboutClause ? ` ${aboutClause}` : ""}, ${ubndMediumName} có ý kiến chỉ đạo như sau:`
+    );
+  }
+
+  const leadAssignLine =
+    `Giao ${targetUnit} chủ trì, phối hợp với các cơ quan, đơn vị có liên quan nghiên cứu nội dung ` +
+    `${docNumberClean || issuerClean ? `${docNoun} nêu trên` : "công việc được giao"}.`;
+  const coordinatorNote =
+    !primaryUnit && coordNames.length > 0 ? ` (Phối hợp thực hiện: ${coordNames.join(", ")})` : "";
+  const dueSuffix = dueShort ? ` **${dueShort}.**` : ".";
+  bodyParagraphs.push(
+    `${leadAssignLine} Tham mưu ${ubndShortName} ${shortActionClause}${coordinatorNote}${dueSuffix}`
+  );
+
+  const closingLine = isOffice
+    ? `${officePhrase} thông báo ý kiến chỉ đạo của ${ubndShortName} đến ${targetUnit} biết, phối hợp triển khai thực hiện./.`
+    : `${ubndShortName} thông báo đến ${targetUnit} biết, phối hợp triển khai thực hiện./.`;
+  bodyParagraphs.push(ensureClosingPunctuation(closingLine));
+
+  return { bodyParagraphs, closingLine };
 }
 
 function normalizeCongVanSubject(rawSubject) {
@@ -367,7 +500,8 @@ function buildDeterministicAssignmentPlan(doc = {}, cfg = DEFAULT_ND30_SETTINGS)
   const settings = { ...DEFAULT_ND30_SETTINGS, ...(cfg || {}) };
   const agencyCode = String(settings.agencyCode || "UBND").trim() || "UBND";
   const deptCode = String(settings.departmentCode || "VP").trim() || "VP";
-  const { isOffice, ubndFullName, ubndShortName, officePhrase } = deriveAgencyNames(settings);
+  const agencyNames = deriveAgencyNames(settings);
+  const { isOffice, ubndShortName } = agencyNames;
 
   const assignees = Array.isArray(doc.assignees) ? doc.assignees : [];
   const leadNames = assignees
@@ -398,55 +532,29 @@ function buildDeterministicAssignmentPlan(doc = {}, cfg = DEFAULT_ND30_SETTINGS)
 
   const docNumberClean = String(doc.docNumber || "").trim();
   const issuerClean = String(doc.issuer || "").trim();
-  const receivedPhrase = doc.receivedDate ? formatReceivedDateVN(doc.receivedDate) : "";
   const aboutClause = formatAboutClause(doc.title);
+  const incomingDocType = detectIncomingDocType(docNumberClean, doc.title);
   const dueShort = formatDueDateShortVN(doc.dueDate);
 
   const rawNoteLines = String(doc.notes || "")
     .split(/\r?\n/)
     .map((l) => l.replace(/^[-•*+\d.)\s]+/, "").trim())
     .filter(Boolean);
-  const notesSummary = rawNoteLines
-    .map((l) => l.replace(/[.]+$/, ""))
-    .filter(Boolean)
-    .join("; ");
+  const shortActionClause = cleanShortActionClause(doc.notes, {
+    issuerClean,
+    hasDueDate: Boolean(dueShort),
+  });
 
-  const bodyParagraphs = [];
-
-  if (docNumberClean || issuerClean) {
-    const docRef = [
-      docNumberClean ? `Công văn số ${docNumberClean}` : "Công văn",
-      receivedPhrase,
-      issuerClean ? `của ${issuerClean}` : "",
-      aboutClause,
-    ]
-      .filter(Boolean)
-      .join(" ");
-    bodyParagraphs.push(`${ubndFullName} nhận được ${docRef}.`);
-    bodyParagraphs.push(`Về vấn đề này, ${ubndShortName} có ý kiến như sau:`);
-  } else {
-    bodyParagraphs.push(
-      `Về nhiệm vụ${aboutClause ? ` ${aboutClause}` : ""}, ${ubndFullName} có ý kiến chỉ đạo như sau:`
-    );
-  }
-
-  const leadAssignLine =
-    `Giao ${targetUnit} chủ trì, phối hợp với các cơ quan, đơn vị có liên quan nghiên cứu nội dung ` +
-    `${docNumberClean || issuerClean ? "Công văn nêu trên" : "công việc được giao"}.`;
-  const actionDetail = notesSummary
-    ? `${notesSummary.charAt(0).toUpperCase()}${notesSummary.slice(1)}`
-    : `Tham mưu ${ubndShortName} tổ chức triển khai thực hiện${
-        issuerClean ? ` và có văn bản gửi về ${issuerClean}` : ""
-      }`;
-  const dueSuffix = dueShort ? ` **${dueShort}.**` : ".";
-  const coordinatorNote =
-    !primaryUnit && coordNames.length > 0 ? ` (Phối hợp thực hiện: ${coordNames.join(", ")})` : "";
-  bodyParagraphs.push(`${leadAssignLine} ${actionDetail}${coordinatorNote}${dueSuffix}`);
-
-  const closingLine = isOffice
-    ? `${officePhrase} thông báo ý kiến chỉ đạo của ${ubndShortName} đến ${targetUnit} biết, phối hợp triển khai thực hiện./.`
-    : `${ubndShortName} thông báo đến ${targetUnit} biết, phối hợp triển khai thực hiện./.`;
-  bodyParagraphs.push(ensureClosingPunctuation(closingLine));
+  const { bodyParagraphs, closingLine } = buildTemplateBodyParagraphs({
+    doc,
+    agencyNames,
+    targetUnit,
+    primaryUnit,
+    coordNames,
+    incomingDocType,
+    aboutClause,
+    shortActionClause,
+  });
 
   const noiNhan = isOffice
     ? ["Như trên;", `${ubndShortName};`, "Lãnh đạo VP;", "Lưu: VT."]
@@ -467,12 +575,21 @@ function buildDeterministicAssignmentPlan(doc = {}, cfg = DEFAULT_ND30_SETTINGS)
       {
         departmentName: targetUnit,
         role: assigneeLabelParts.join("; ") || "Chủ trì tham mưu, thực hiện",
-        tasks: rawNoteLines.length > 0 ? rawNoteLines : [actionDetail],
+        tasks: rawNoteLines.length > 0 ? rawNoteLines : [`Tham mưu ${ubndShortName} ${shortActionClause}`],
         deadline: formatDueDateVN(doc.dueDate),
       },
     ],
     closingParagraph: closingLine,
     noiNhan,
+    _meta: {
+      agencyNames,
+      targetUnit,
+      primaryUnit,
+      coordNames,
+      incomingDocType,
+      aboutClause,
+      shortActionClause,
+    },
   };
 }
 
@@ -1036,44 +1153,54 @@ class Nd30DocxService {
 
     const pub = this.geminiService?.getPublicSettings?.() || {};
     const model = String(activeAi.model || pub.geminiModel || "gemini-2.5-flash").trim();
+    const fallback = buildDeterministicAssignmentPlan(doc, settings);
+    const meta = fallback._meta || {};
+    const agencyNames = meta.agencyNames || deriveAgencyNames(settings);
+    const { ubndFullName, ubndMediumName, ubndShortName, officePhrase, isOffice } = agencyNames;
+    const dueShort = formatDueDateShortVN(doc.dueDate);
+    const targetUnit = meta.targetUnit || doc.department || "Phòng chuyên môn";
     const assignees = Array.isArray(doc.assignees)
       ? doc.assignees.map((a) => `${a.displayName || a.userId} (${a.role === "coord" ? "Phối hợp" : "Chủ trì"})`).join(", ")
       : "";
-    const { isOffice, ubndFullName, ubndShortName, officePhrase } = deriveAgencyNames(settings);
-    const dueShort = formatDueDateShortVN(doc.dueDate);
-    const defaultNoiNhan = isOffice
-      ? ["Như trên;", `${ubndShortName};`, "Lãnh đạo VP;", "Lưu: VT."]
-      : ["Như trên;", `Lãnh đạo ${ubndShortName};`, `Lưu: VT, ${settings.departmentCode}.`];
 
-    const prompt = `Bạn là Chuyên gia Văn thư - Hành chính nhà nước Việt Nam theo Nghị định số 30/2020/NĐ-CP.
-Hãy soạn thảo nội dung CÔNG VĂN THÔNG BÁO Ý KIẾN CHỈ ĐẠO / GIAO VIỆC của "${settings.issuingAgency}" (Cơ quan chủ quản: "${settings.parentAgency}", Người ký: "${settings.signerTitle} ${settings.signerName}") dựa trên thông tin sau:
+    const prompt = `Bạn là trợ lý văn thư hành chính Việt Nam theo Nghị định 30/2020/NĐ-CP.
+Hệ thống ĐÃ CỐ ĐỊNH sẵn khung mẫu Công văn giao việc dưới đây; bạn CHỈ cần rút gọn và điền các phần biến đổi (phần [THAY]) sao cho THẬT NGẮN GỌN, SÚC TÍCH đúng theo văn bản đến được cung cấp:
+
+--- KHUNG MẪU CỐ ĐỊNH ---
+- Trích yếu: [THAY: subject dạng "V/v ..."]
+- Kính gửi: [THAY: recipients]
+- Đoạn 1: ${ubndFullName} nhận được [THAY: incomingDocType] số ${doc.docNumber || "..."} ${doc.receivedDate ? formatReceivedDateVN(doc.receivedDate) : "..."} của ${doc.issuer || "..."} [THAY: aboutClause dạng "về việc ..."].
+- Đoạn 2: Về vấn đề này, ${ubndMediumName} có ý kiến như sau:
+- Đoạn 3: Giao ${targetUnit} chủ trì, phối hợp với các cơ quan, đơn vị có liên quan nghiên cứu nội dung [incomingDocType] nêu trên. Tham mưu ${ubndShortName} [THAY: shortActionClause]${dueShort ? ` **${dueShort}.**` : "."}
+- Đoạn 4: ${isOffice ? `${officePhrase} thông báo ý kiến chỉ đạo của ${ubndShortName} đến ${targetUnit} biết, phối hợp triển khai thực hiện./.` : `${ubndShortName} thông báo đến ${targetUnit} biết, phối hợp triển khai thực hiện./.`}
+---------------------------
+
+Thông tin văn bản đầu vào:
 - Số/Ký hiệu văn bản đến: ${doc.docNumber || "(Không có)"}
-- Cơ quan ban hành văn bản đến: ${doc.issuer || "(Không rõ)"}
+- Cơ quan ban hành: ${doc.issuer || "(Không rõ)"}
 - Ngày văn bản đến: ${doc.receivedDate ? formatReceivedDateVN(doc.receivedDate) : "(Không rõ)"}
-- Trích yếu nội dung: ${doc.title || ""}
-- Phòng/đơn vị phụ trách: ${doc.department || "(Chưa phân phòng ban)"}
-- Cá nhân thực hiện (Zalo): ${assignees || "(Chưa chọn)"}
+- Trích yếu gốc: ${doc.title || ""}
+- Đơn vị phụ trách: ${doc.department || "(Chưa chọn)"}
+- Cá nhân thực hiện: ${assignees || "(Chưa chọn)"}
 - Hạn hoàn thành: ${dueShort || "(Không nêu cụ thể)"}
-- Nội dung chỉ đạo / yêu cầu: ${doc.notes || "(Triển khai thực hiện theo nội dung văn bản)"}
+- Ghi chú / yêu cầu chi tiết: ${doc.notes || "(Không có)"}
 
-⚠️ YÊU CẦU BẮT BUỘC VỀ VĂN PHONG & BỐ CỤC:
-Viết phần nội dung thành 4 đoạn văn xuôi mạch lạc, súc tích, KHÔNG đánh số "1.", "2." hay gạch đầu dòng cứng nhắc. Hãy tham khảo đúng văn phong mẫu sau:
-- Đoạn 1: "${ubndFullName} nhận được Công văn số 9315/SNV-TCBC ngày 20 tháng 11 năm 2026 của Sở Nội vụ về việc ..."
-- Đoạn 2: "Về vấn đề này, ${ubndShortName} có ý kiến như sau:"
-- Đoạn 3: "Giao [Đơn vị phụ trách] chủ trì, phối hợp với các cơ quan, đơn vị có liên quan nghiên cứu nội dung Công văn nêu trên. Tham mưu ${ubndShortName} [nội dung thực hiện / góp ý / báo cáo cụ thể] **${dueShort || "đúng thời hạn quy định"}.**" (bọc phần thời hạn trong **...** để in đậm trong Word).
-- Đoạn 4: "${isOffice ? `${officePhrase} thông báo ý kiến chỉ đạo của ${ubndShortName} đến [Đơn vị phụ trách] biết, phối hợp triển khai thực hiện./.` : `${ubndShortName} thông báo đến [Đơn vị phụ trách] biết, phối hợp triển khai thực hiện./.`}"
+⚠️ QUY TẮC BẮT BUỘC:
+1. "subject": Giữ sát trích yếu gốc dạng "V/v ..." (ngắn gọn, rõ ràng).
+2. "incomingDocType": Loại văn bản đến (thường là "Công văn", hoặc "Kế hoạch", "Thông báo", "Giấy mời", "Báo cáo", "Tờ trình", "Quyết định").
+3. "aboutClause": Bắt đầu bằng "về việc ..." (chữ thường sau "về việc"), khớp nội dung với "subject".
+4. "recipients": Mảng gồm đúng tên đơn vị nhận (mặc định: ${JSON.stringify(fallback.recipients)}).
+5. "shortActionClause": CHỈ 1 cụm hành động thật NGẮN GỌN (6 - 20 từ) để nối ngay sau "Tham mưu ${ubndShortName} ".
+   - Ví dụ chuẩn: "có ý kiến góp ý và gửi về Sở Nội vụ" hoặc "tổng hợp, báo cáo về Sở Tài chính" hoặc "triển khai thực hiện theo quy định".
+   - KHÔNG lặp lại "Tham mưu UBND...", KHÔNG lặp lại "Giao...", KHÔNG lặp lại "nghiên cứu nội dung Công văn nêu trên", KHÔNG ghi ngày tháng hạn chót (hệ thống tự gắn "${dueShort || ""}"), KHÔNG viết nhiều câu hay gạch đầu dòng.
 
-Trả về duy nhất 1 JSON hợp lệ gồm:
+Trả về duy nhất 1 JSON hợp lệ:
 {
-  "subject": "V/v ... (ngắn gọn, chuẩn Công văn NĐ 30/2020)",
-  "recipients": ["${doc.department || "Tên phòng ban / đơn vị nhận"}"],
-  "bodyParagraphs": [
-    "Đoạn 1...",
-    "Đoạn 2...",
-    "Đoạn 3 (có **trước ngày DD/MM/YYYY.** nếu có hạn)...",
-    "Đoạn 4 kết thúc bằng ./."
-  ],
-  "noiNhan": ${JSON.stringify(defaultNoiNhan)}
+  "subject": "V/v ...",
+  "incomingDocType": "Công văn",
+  "aboutClause": "về việc ...",
+  "recipients": ${JSON.stringify(fallback.recipients)},
+  "shortActionClause": "..."
 }`;
 
     try {
@@ -1081,13 +1208,13 @@ Trả về duy nhất 1 JSON hợp lệ gồm:
       if (typeof this.geminiService?.callActiveAiForJson === "function") {
         text = await this.geminiService.callActiveAiForJson({
           parts: [{ text: prompt }],
-          temperature: 0.2,
+          temperature: 0.1,
         });
       } else {
         const res = await this.callGeminiRestApi(apiKey, model, {
           contents: [{ role: "user", parts: [{ text: prompt }] }],
           generationConfig: {
-            temperature: 0.2,
+            temperature: 0.1,
             responseMimeType: "application/json",
           },
         });
@@ -1098,38 +1225,45 @@ Trả về duy nhất 1 JSON hợp lệ gồm:
       const parsed = JSON.parse(cleaned);
       if (!parsed || typeof parsed !== "object") return null;
 
-      const fallback = buildDeterministicAssignmentPlan(doc, settings);
-      const aiBody =
-        Array.isArray(parsed.bodyParagraphs) && parsed.bodyParagraphs.length > 0
-          ? parsed.bodyParagraphs.map((p) => String(p || "").trim()).filter(Boolean)
-          : null;
+      const recipients =
+        Array.isArray(parsed.recipients) && parsed.recipients.length > 0
+          ? parsed.recipients.map((r) => String(r || "").trim()).filter(Boolean)
+          : fallback.recipients;
+      const finalRecipients = recipients.length > 0 ? recipients : fallback.recipients;
+      const finalTargetUnit =
+        String(doc.department || "").trim() || finalRecipients[0] || meta.targetUnit;
+      const incomingDocType = String(parsed.incomingDocType || meta.incomingDocType || "Công văn").trim();
+      const aboutClause = parsed.aboutClause
+        ? formatAboutClause(parsed.aboutClause)
+        : meta.aboutClause;
+      const shortActionClause = parsed.shortActionClause
+        ? cleanShortActionClause(parsed.shortActionClause, {
+            issuerClean: String(doc.issuer || "").trim(),
+            hasDueDate: Boolean(dueShort),
+          })
+        : meta.shortActionClause;
+
+      const { bodyParagraphs, closingLine } = buildTemplateBodyParagraphs({
+        doc,
+        agencyNames,
+        targetUnit: finalTargetUnit,
+        primaryUnit: meta.primaryUnit || "",
+        coordNames: meta.coordNames || [],
+        incomingDocType,
+        aboutClause,
+        shortActionClause,
+      });
 
       return {
         documentNumber: fallback.documentNumber,
         symbolSuffix: fallback.symbolSuffix,
         subject: normalizeCongVanSubject(parsed.subject || fallback.subject),
-        recipients:
-          Array.isArray(parsed.recipients) && parsed.recipients.length > 0
-            ? parsed.recipients
-            : fallback.recipients,
-        bodyParagraphs: aiBody || fallback.bodyParagraphs,
-        preambleParagraphs:
-          !aiBody && Array.isArray(parsed.preambleParagraphs) && parsed.preambleParagraphs.length > 0
-            ? parsed.preambleParagraphs
-            : fallback.preambleParagraphs,
-        departmentAssignments:
-          !aiBody &&
-          Array.isArray(parsed.departmentAssignments) &&
-          parsed.departmentAssignments.length > 0
-            ? parsed.departmentAssignments
-            : fallback.departmentAssignments,
-        closingParagraph: ensureClosingPunctuation(
-          parsed.closingParagraph || fallback.closingParagraph
-        ),
-        noiNhan:
-          Array.isArray(parsed.noiNhan) && parsed.noiNhan.length > 0
-            ? parsed.noiNhan
-            : fallback.noiNhan,
+        recipients: finalRecipients,
+        bodyParagraphs,
+        preambleParagraphs: bodyParagraphs.slice(0, 2),
+        departmentAssignments: fallback.departmentAssignments,
+        closingParagraph: ensureClosingPunctuation(closingLine),
+        noiNhan: fallback.noiNhan,
       };
     } catch (err) {
       console.warn("AI ND30 drafting fallback to template:", err?.message || err);
@@ -1198,4 +1332,5 @@ module.exports = {
   formatStandardLocationDate,
   normalizeCongVanSubject,
   ensureClosingPunctuation,
+  cleanShortActionClause,
 };

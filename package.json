@@ -1,6 +1,6 @@
 {
   "name": "quan-ly-cong-viec-zalo",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "zOffice - Ứng dụng Quản lý Văn bản & Công việc trên Windows tích hợp Zalo (zca-js)",
   "repository": "Zon639/zOffice",
   "main": "src/main/main.js",

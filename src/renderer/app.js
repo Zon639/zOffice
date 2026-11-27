@@ -3458,6 +3458,7 @@ window.addEventListener("DOMContentLoaded", async () => {
         attachments: state.formAttachments,
         autoGenerateNd30: autoGenNd30,
         forceGenerateNd30: autoGenNd30,
+        openNd30AfterSave: autoGenNd30,
       };
 
       const savedDoc = await window.appApi.saveDocument(payload);
@@ -3482,6 +3483,13 @@ window.addEventListener("DOMContentLoaded", async () => {
         showToast(
           `Đã lưu văn bản ${savedDoc.docNumber}, nhưng lỗi đồng bộ Sheet: ${savedDoc.sheetSyncError}`,
           "info"
+        );
+      } else if (savedDoc.nd30JustGenerated && autoGenNd30) {
+        showToast(
+          savedDoc.nd30OpenError
+            ? `📜 Đã lưu & tạo Công văn Giao việc NĐ 30/2020 (không tự mở được tệp: ${savedDoc.nd30OpenError})`
+            : `📜 Đã lưu, tạo & mở Công văn Giao việc NĐ 30/2020 cho ${savedDoc.docNumber || "nhiệm vụ"}!`,
+          savedDoc.nd30OpenError ? "info" : "success"
         );
       } else if (savedDoc.nd30GeneratedDocPath && autoGenNd30) {
         showToast(
