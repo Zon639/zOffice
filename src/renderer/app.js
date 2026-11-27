@@ -1,10 +1,11 @@
 const STANDARD_DEPARTMENTS = [
   "Phòng Kinh tế",
-  "Phòng Văn Hóa",
+  "Phòng Văn hóa - Xã hội",
   "Công an",
   "Quân sự",
   "Trung tâm dịch vụ tổng hợp",
   "Trung tâm Phục vụ Hành chính công",
+  "Trạm Y tế",
 ];
 
 // ==================== STATE MANAGEMENT ====================
@@ -3966,6 +3967,27 @@ window.addEventListener("DOMContentLoaded", async () => {
     closeModal("geminiSettingsModal");
     setViewMode("dashboard");
   };
+
+  document
+    .getElementById("btnInstallNd30AddIn")
+    ?.addEventListener("click", async (e) => {
+      const btn = e.currentTarget;
+      const prev = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = "⏳ Đang cài Add-in...";
+      try {
+        await window.appApi.installNd30AddIn();
+        showToast(
+          "Đã cài đặt Add-in Nghị định 30/2020 vào Microsoft Word! Mở lại Word để thấy tab 'NGHỊ ĐỊNH 30/2020'.",
+          "success"
+        );
+      } catch (err) {
+        showToast(err.message || "Không thể cài Add-in Word", "error");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = prev;
+      }
+    });
 
   document
     .getElementById("btnImportNd30FromAddIn")

@@ -4,11 +4,12 @@ const path = require("node:path");
 
 const STANDARD_DEPARTMENTS = [
   "Phòng Kinh tế",
-  "Phòng Văn Hóa",
+  "Phòng Văn hóa - Xã hội",
   "Công an",
   "Quân sự",
   "Trung tâm dịch vụ tổng hợp",
   "Trung tâm Phục vụ Hành chính công",
+  "Trạm Y tế",
 ];
 
 function normalizeAppsScriptWebAppUrl(value) {

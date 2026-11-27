@@ -14,11 +14,12 @@ const SHEET_LOGS = "NhatKy_DongBo";
 
 const STANDARD_DEPARTMENTS = [
   "Phòng Kinh tế",
-  "Phòng Văn Hóa",
+  "Phòng Văn hóa - Xã hội",
   "Công an",
   "Quân sự",
   "Trung tâm dịch vụ tổng hợp",
   "Trung tâm Phục vụ Hành chính công",
+  "Trạm Y tế",
 ];
 
 const TASK_HEADERS = [

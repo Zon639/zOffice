@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld("appApi", {
     ipcRenderer.invoke("nd30:generate-for-doc", payload),
   importNd30AddInSettings: () =>
     ipcRenderer.invoke("nd30:import-addin-settings"),
+  installNd30AddIn: () => ipcRenderer.invoke("nd30:install-addin"),
 
   // Files & Storage Configuration
   pickFiles: () => ipcRenderer.invoke("files:pick"),

@@ -410,11 +410,12 @@
             <select id="filterDepartment" class="filter-select" title="Lọc theo phòng ban chuyên môn">
               <option value="">🏢 Tất cả phòng ban</option>
               <option value="Phòng Kinh tế">Phòng Kinh tế</option>
-              <option value="Phòng Văn Hóa">Phòng Văn Hóa</option>
+              <option value="Phòng Văn hóa - Xã hội">Phòng Văn hóa - Xã hội</option>
               <option value="Công an">Công an</option>
               <option value="Quân sự">Quân sự</option>
               <option value="Trung tâm dịch vụ tổng hợp">Trung tâm dịch vụ tổng hợp</option>
               <option value="Trung tâm Phục vụ Hành chính công">Trung tâm Phục vụ Hành chính công</option>
+              <option value="Trạm Y tế">Trạm Y tế</option>
             </select>
 
             <select id="filterAssignee" class="filter-select" title="Lọc theo người phụ trách">
@@ -686,11 +687,12 @@
               <select id="docDepartmentInput">
                 <option value="">-- Chọn phòng ban chuyên môn --</option>
                 <option value="Phòng Kinh tế">Phòng Kinh tế</option>
-                <option value="Phòng Văn Hóa">Phòng Văn Hóa</option>
+                <option value="Phòng Văn hóa - Xã hội">Phòng Văn hóa - Xã hội</option>
                 <option value="Công an">Công an</option>
                 <option value="Quân sự">Quân sự</option>
                 <option value="Trung tâm dịch vụ tổng hợp">Trung tâm dịch vụ tổng hợp</option>
                 <option value="Trung tâm Phục vụ Hành chính công">Trung tâm Phục vụ Hành chính công</option>
+                <option value="Trạm Y tế">Trạm Y tế</option>
                 <option value="__custom__">➕ Nhập phòng ban / đơn vị khác...</option>
               </select>
               <input
@@ -1442,11 +1444,12 @@
               <select id="defaultDepartmentSelect">
                 <option value="">-- Không cố định (chọn từng văn bản) --</option>
                 <option value="Phòng Kinh tế">Phòng Kinh tế</option>
-                <option value="Phòng Văn Hóa">Phòng Văn Hóa</option>
+                <option value="Phòng Văn hóa - Xã hội">Phòng Văn hóa - Xã hội</option>
                 <option value="Công an">Công an</option>
                 <option value="Quân sự">Quân sự</option>
                 <option value="Trung tâm dịch vụ tổng hợp">Trung tâm dịch vụ tổng hợp</option>
                 <option value="Trung tâm Phục vụ Hành chính công">Trung tâm Phục vụ Hành chính công</option>
+                <option value="Trạm Y tế">Trạm Y tế</option>
               </select>
             </div>
           </div>
@@ -1495,30 +1498,35 @@
         <div class="completion-details-card" id="nd30SettingsSection">
           <div class="section-heading">
             <span>📜 Chuẩn Hóa Công Văn Giao Việc (Nghị Định 30/2020/NĐ-CP)</span>
-            <button type="button" class="btn btn-secondary btn-xs" id="btnImportNd30FromAddIn" title="Đọc thông tin cơ quan, người ký, lề trang từ Add-in NghiDinh30WordAddIn">
-              🔄 Nạp từ Word Add-in
-            </button>
+            <div class="inline-actions">
+              <button type="button" class="btn btn-secondary btn-xs" id="btnInstallNd30AddIn" title="Cài đặt / đăng ký lại Add-in Nghị định 30/2020 vào Microsoft Word">
+                🧩 Cài Add-in Word
+              </button>
+              <button type="button" class="btn btn-secondary btn-xs" id="btnImportNd30FromAddIn" title="Đọc thông tin cơ quan, người ký, lề trang từ Add-in NghiDinh30WordAddIn">
+                🔄 Nạp từ Word Add-in
+              </button>
+            </div>
           </div>
 
           <div class="form-row-2 mt-12">
             <div class="form-group">
               <label for="nd30ParentAgencyInput">Cơ quan chủ quản:</label>
-              <input type="text" id="nd30ParentAgencyInput" placeholder="VD: ỦY BAN NHÂN DÂN XÃ" />
+              <input type="text" id="nd30ParentAgencyInput" placeholder="VD: UBND XÃ BÌNH THẠNH ĐÔNG" />
             </div>
             <div class="form-group">
               <label for="nd30IssuingAgencyInput">Cơ quan ban hành:</label>
-              <input type="text" id="nd30IssuingAgencyInput" placeholder="VD: BÌNH THẠNH ĐÔNG" />
+              <input type="text" id="nd30IssuingAgencyInput" placeholder="VD: VĂN PHÒNG HĐND VÀ UBND" />
             </div>
           </div>
 
           <div class="form-row-2 mt-12">
             <div class="form-group">
               <label for="nd30AgencyCodeInput">Mã viết tắt cơ quan:</label>
-              <input type="text" id="nd30AgencyCodeInput" placeholder="VD: UBND" />
+              <input type="text" id="nd30AgencyCodeInput" placeholder="VD: VP" />
             </div>
             <div class="form-group">
               <label for="nd30DepartmentCodeInput">Mã đơn vị soạn thảo:</label>
-              <input type="text" id="nd30DepartmentCodeInput" placeholder="VD: VP" />
+              <input type="text" id="nd30DepartmentCodeInput" placeholder="VD: TH" />
             </div>
           </div>
 

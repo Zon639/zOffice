@@ -1,5 +1,6 @@
-# Dependencies
+# Dependencies & Build output
 node_modules/
+dist/
 
 # User local data, API keys, credentials, Zalo session & stored documents
 data/

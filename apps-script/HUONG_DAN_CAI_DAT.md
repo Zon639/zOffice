@@ -2,11 +2,12 @@
 
 Hệ thống hỗ trợ nhiều chuyên viên ở các máy khác nhau cùng giao việc và tự động đồng bộ về một **Google Sheet trung tâm**, kèm theo **Web Dashboard** theo dõi tiến độ toàn cơ quan hoặc lọc riêng theo từng phòng ban:
 - Phòng Kinh tế
-- Phòng Văn Hóa
+- Phòng Văn hóa - Xã hội
 - Công an
 - Quân sự
 - Trung tâm dịch vụ tổng hợp
 - Trung tâm Phục vụ Hành chính công
+- Trạm Y tế
 
 ## Bước 1: Tạo Google Sheet tổng hợp
 1. Truy cập [Google Sheets](https://sheets.google.com) và tạo một bảng tính mới (ví dụ: `TongHop_CongViec_PhongBan`).

@@ -153,3 +153,68 @@ test("buildCongVanDocxBuffer generates valid ND 30/2020 DOCX archive with requir
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 });
+
+test("buildDeterministicAssignmentPlan matches office directive style with bold deadline", () => {
+  const plan = buildDeterministicAssignmentPlan(
+    {
+      docNumber: "9315/SNV-TCBC",
+      issuer: "Sở Nội vụ",
+      receivedDate: "2026-11-20",
+      dueDate: "2026-11-24T17:00",
+      department: "Phòng Văn hóa - Xã hội",
+      title: "lấy ý kiến hồ sơ dự thảo Thông tư sửa đổi, bổ sung một số điều của Thông tư số 05/2025/TT-BNV",
+      notes: "Tham mưu UBND xã có ý kiến góp ý và gửi về Sở Nội vụ",
+    },
+    {
+      ...DEFAULT_ND30_SETTINGS,
+      parentAgency: "UBND XÃ BÌNH THẠNH ĐÔNG",
+      issuingAgency: "VĂN PHÒNG HĐND VÀ UBND",
+      agencyCode: "VP",
+      departmentCode: "TH",
+      location: "Bình Thạnh Đông",
+      signerTitle: "CHÁNH VĂN PHÒNG",
+      signerName: "Trần Thị Kim Pha",
+      nextDocNumber: 12,
+    }
+  );
+
+  assert.equal(plan.symbolSuffix, "VP-TH");
+  assert.deepEqual(plan.recipients, ["Phòng Văn hóa - Xã hội"]);
+  assert.equal(plan.bodyParagraphs.length, 4);
+  assert.match(
+    plan.bodyParagraphs[0],
+    /^Ủy ban nhân dân xã Bình Thạnh Đông nhận được Công văn số 9315\/SNV-TCBC ngày 20 tháng 11 năm 2026 của Sở Nội vụ về việc lấy ý kiến/
+  );
+  assert.equal(plan.bodyParagraphs[1], "Về vấn đề này, UBND xã có ý kiến như sau:");
+  assert.match(
+    plan.bodyParagraphs[2],
+    /Giao Phòng Văn hóa - Xã hội chủ trì, phối hợp với các cơ quan, đơn vị có liên quan.*\*\*trước ngày 24\/11\/2026\.\*\*$/
+  );
+  assert.equal(
+    plan.bodyParagraphs[3],
+    "Văn phòng HĐND và UBND xã thông báo ý kiến chỉ đạo của UBND xã đến Phòng Văn hóa - Xã hội biết, phối hợp triển khai thực hiện./."
+  );
+  assert.deepEqual(plan.noiNhan, [
+    "Như trên;",
+    "UBND xã;",
+    "Lãnh đạo VP;",
+    "Lưu: VT.",
+  ]);
+
+  const buf = buildCongVanDocxBuffer(plan, {
+    ...DEFAULT_ND30_SETTINGS,
+    parentAgency: "UBND XÃ BÌNH THẠNH ĐÔNG",
+    issuingAgency: "VĂN PHÒNG HĐND VÀ UBND",
+    agencyCode: "VP",
+    departmentCode: "TH",
+    location: "Bình Thạnh Đông",
+    signerTitle: "CHÁNH VĂN PHÒNG",
+    signerName: "Trần Thị Kim Pha",
+  });
+  const text = extractTextFromDocxBuffer(buf);
+  assert.match(text, /Kính gửi: Phòng Văn hóa - Xã hội/);
+  assert.match(text, /trước ngày 24\/11\/2026\./);
+  assert.doesNotMatch(text, /\*\*trước ngày/);
+  assert.match(text, /CHÁNH VĂN PHÒNG/);
+  assert.match(text, /Trần Thị Kim Pha/);
+});

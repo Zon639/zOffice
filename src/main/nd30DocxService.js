@@ -239,7 +239,20 @@ function formatDueDateVN(dueDateStr) {
   const yyyy = d.getFullYear();
   const hh = String(d.getHours()).padStart(2, "0");
   const min = String(d.getMinutes()).padStart(2, "0");
+  if ((hh === "17" && min === "00") || (hh === "00" && min === "00")) {
+    return `trước ngày ${dd}/${mm}/${yyyy}`;
+  }
   return `trước ${hh}h${min} ngày ${dd}/${mm}/${yyyy}`;
+}
+
+function formatDueDateShortVN(dueDateStr) {
+  if (!dueDateStr) return "";
+  const d = new Date(dueDateStr);
+  if (Number.isNaN(d.getTime())) return String(dueDateStr).trim();
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `trước ngày ${dd}/${mm}/${yyyy}`;
 }
 
 function formatReceivedDateVN(dateStr) {
@@ -249,6 +262,84 @@ function formatReceivedDateVN(dateStr) {
     return `ngày ${m[3]} tháng ${m[2]} năm ${m[1]}`;
   }
   return String(dateStr).trim();
+}
+
+function formatAboutClause(rawTitle) {
+  let s = String(rawTitle || "").trim();
+  if (!s) return "";
+  if (/^v\/v[:.\s]*/i.test(s)) {
+    s = s.replace(/^v\/v[:.\s]*/i, "").trim();
+  } else if (/^về việc\s+/i.test(s)) {
+    s = s.replace(/^về việc\s+/i, "").trim();
+  }
+  if (!s) return "";
+  return `về việc ${s.charAt(0).toLowerCase()}${s.slice(1)}`;
+}
+
+function formatAdminPhraseCase(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  const acronyms = new Set(["UBND", "HĐND", "VP", "TW", "TP", "BCH", "ĐU", "CNTT", "CĐS", "KHCN", "SKHCN"]);
+  const lowerWords = new Set(["xã", "phường", "thị", "trấn", "huyện", "quận", "tỉnh", "thành", "phố", "và", "của"]);
+  const words = s.split(/\s+/);
+  return words
+    .map((w, idx) => {
+      const upper = w.toUpperCase();
+      if (acronyms.has(upper)) return upper;
+      const lower = w.toLowerCase();
+      if (idx > 0 && lowerWords.has(lower)) return lower;
+      return lower.charAt(0).toUpperCase() + lower.slice(1);
+    })
+    .join(" ");
+}
+
+function deriveAgencyNames(settings = {}) {
+  const rawParent = String(settings.parentAgency || "").trim();
+  const rawIssuing = String(settings.issuingAgency || "").trim();
+  const location = String(settings.location || "").trim();
+
+  const isOffice = /văn\s*phòng/i.test(rawIssuing);
+  const combined = `${rawParent} ${rawIssuing}`;
+  let levelNoun = "";
+  if (/(?<!\p{L})xã(?!\p{L})/iu.test(combined)) levelNoun = "xã";
+  else if (/(?<!\p{L})phường(?!\p{L})/iu.test(combined)) levelNoun = "phường";
+  else if (/(?<!\p{L})thị\s*trấn(?!\p{L})/iu.test(combined)) levelNoun = "thị trấn";
+  else if (/(?<!\p{L})huyện(?!\p{L})/iu.test(combined)) levelNoun = "huyện";
+  else if (/(?<!\p{L})quận(?!\p{L})/iu.test(combined)) levelNoun = "quận";
+  else if (/(?<!\p{L})thành\s*phố(?!\p{L})/iu.test(combined)) levelNoun = "thành phố";
+  else if (/(?<!\p{L})tỉnh(?!\p{L})/iu.test(combined)) levelNoun = "tỉnh";
+
+  // Xác định tên đầy đủ của cơ quan chỉ đạo (UBND ...)
+  let ubndSource = isOffice ? rawParent : rawIssuing || rawParent;
+  ubndSource = ubndSource.replace(/^UBND(?!\p{L})/iu, "Ủy ban nhân dân").replace(/^ỦY BAN NHÂN DÂN(?!\p{L})/iu, "Ủy ban nhân dân");
+  let ubndFullName = formatAdminPhraseCase(ubndSource)
+    .replace(/^Ủy Ban Nhân Dân/i, "Ủy ban nhân dân");
+  if (/^Ủy ban nhân dân(\s+(xã|phường|tỉnh|thành phố))?$/i.test(ubndFullName) && location) {
+    ubndFullName = `${ubndFullName} ${location}`.trim();
+  }
+  if (!ubndFullName) {
+    ubndFullName = levelNoun ? `Ủy ban nhân dân ${levelNoun}` : "Ủy ban nhân dân";
+  }
+
+  const ubndShortName = levelNoun ? `UBND ${levelNoun}` : "UBND";
+
+  let officePhrase = ubndShortName;
+  if (isOffice) {
+    let formattedOffice = formatAdminPhraseCase(rawIssuing)
+      .replace(/^Văn Phòng/i, "Văn phòng");
+    if (levelNoun && !new RegExp(`(?<!\\p{L})${levelNoun}(?!\\p{L})`, "iu").test(formattedOffice)) {
+      formattedOffice = `${formattedOffice} ${levelNoun}`;
+    }
+    officePhrase = formattedOffice;
+  }
+
+  return {
+    isOffice,
+    levelNoun,
+    ubndFullName,
+    ubndShortName,
+    officePhrase,
+  };
 }
 
 function normalizeCongVanSubject(rawSubject) {
@@ -274,9 +365,9 @@ function ensureClosingPunctuation(text) {
 
 function buildDeterministicAssignmentPlan(doc = {}, cfg = DEFAULT_ND30_SETTINGS) {
   const settings = { ...DEFAULT_ND30_SETTINGS, ...(cfg || {}) };
-  const agency = String(settings.issuingAgency || "ỦY BAN NHÂN DÂN").trim();
   const agencyCode = String(settings.agencyCode || "UBND").trim() || "UBND";
   const deptCode = String(settings.departmentCode || "VP").trim() || "VP";
+  const { isOffice, ubndFullName, ubndShortName, officePhrase } = deriveAgencyNames(settings);
 
   const assignees = Array.isArray(doc.assignees) ? doc.assignees : [];
   const leadNames = assignees
@@ -301,72 +392,105 @@ function buildDeterministicAssignmentPlan(doc = {}, cfg = DEFAULT_ND30_SETTINGS)
     recipients.push("Các phòng, ban chuyên môn và đơn vị liên quan");
   }
 
-  const refParts = [];
-  if (doc.docNumber) refParts.push(`Văn bản số ${String(doc.docNumber).trim()}`);
-  if (doc.receivedDate) refParts.push(formatReceivedDateVN(doc.receivedDate));
-  if (doc.issuer) refParts.push(`của ${String(doc.issuer).trim()}`);
-  const refClause =
-    refParts.length > 0
-      ? `Thực hiện ${refParts.join(" ")}${doc.title ? ` về việc ${String(doc.title).trim()}` : ""}, `
-      : "Căn cứ yêu cầu nhiệm vụ công tác, ";
+  const targetUnit =
+    primaryUnit ||
+    (leadNames.length > 0 ? leadNames.join(", ") : "các phòng, ban chuyên môn có liên quan");
 
-  const preamble = `${refClause}${agency} yêu cầu ${
-    primaryUnit || "các đơn vị, cá nhân có liên quan"
-  } tập trung triển khai thực hiện các nội dung sau:`;
+  const docNumberClean = String(doc.docNumber || "").trim();
+  const issuerClean = String(doc.issuer || "").trim();
+  const receivedPhrase = doc.receivedDate ? formatReceivedDateVN(doc.receivedDate) : "";
+  const aboutClause = formatAboutClause(doc.title);
+  const dueShort = formatDueDateShortVN(doc.dueDate);
 
   const rawNoteLines = String(doc.notes || "")
     .split(/\r?\n/)
     .map((l) => l.replace(/^[-•*+\d.)\s]+/, "").trim())
     .filter(Boolean);
+  const notesSummary = rawNoteLines
+    .map((l) => l.replace(/[.]+$/, ""))
+    .filter(Boolean)
+    .join("; ");
 
-  const tasks =
-    rawNoteLines.length > 0
-      ? rawNoteLines
-      : [
-          `Nghiên cứu nội dung${doc.docNumber ? ` Văn bản số ${doc.docNumber}` : ""}${
-            doc.title ? ` ("${doc.title}")` : ""
-          } để tổ chức triển khai thực hiện đúng quy định và bảo đảm tiến độ.`,
-          `Tham mưu, đề xuất phương án xử lý hoặc báo cáo kết quả thực hiện về ${agency} (qua ${deptCode}) để tổng hợp.`,
-        ];
+  const bodyParagraphs = [];
+
+  if (docNumberClean || issuerClean) {
+    const docRef = [
+      docNumberClean ? `Công văn số ${docNumberClean}` : "Công văn",
+      receivedPhrase,
+      issuerClean ? `của ${issuerClean}` : "",
+      aboutClause,
+    ]
+      .filter(Boolean)
+      .join(" ");
+    bodyParagraphs.push(`${ubndFullName} nhận được ${docRef}.`);
+    bodyParagraphs.push(`Về vấn đề này, ${ubndShortName} có ý kiến như sau:`);
+  } else {
+    bodyParagraphs.push(
+      `Về nhiệm vụ${aboutClause ? ` ${aboutClause}` : ""}, ${ubndFullName} có ý kiến chỉ đạo như sau:`
+    );
+  }
+
+  const leadAssignLine =
+    `Giao ${targetUnit} chủ trì, phối hợp với các cơ quan, đơn vị có liên quan nghiên cứu nội dung ` +
+    `${docNumberClean || issuerClean ? "Công văn nêu trên" : "công việc được giao"}.`;
+  const actionDetail = notesSummary
+    ? `${notesSummary.charAt(0).toUpperCase()}${notesSummary.slice(1)}`
+    : `Tham mưu ${ubndShortName} tổ chức triển khai thực hiện${
+        issuerClean ? ` và có văn bản gửi về ${issuerClean}` : ""
+      }`;
+  const dueSuffix = dueShort ? ` **${dueShort}.**` : ".";
+  const coordinatorNote =
+    !primaryUnit && coordNames.length > 0 ? ` (Phối hợp thực hiện: ${coordNames.join(", ")})` : "";
+  bodyParagraphs.push(`${leadAssignLine} ${actionDetail}${coordinatorNote}${dueSuffix}`);
+
+  const closingLine = isOffice
+    ? `${officePhrase} thông báo ý kiến chỉ đạo của ${ubndShortName} đến ${targetUnit} biết, phối hợp triển khai thực hiện./.`
+    : `${ubndShortName} thông báo đến ${targetUnit} biết, phối hợp triển khai thực hiện./.`;
+  bodyParagraphs.push(ensureClosingPunctuation(closingLine));
+
+  const noiNhan = isOffice
+    ? ["Như trên;", `${ubndShortName};`, "Lãnh đạo VP;", "Lưu: VT."]
+    : ["Như trên;", `Lãnh đạo ${ubndShortName};`, `Lưu: VT, ${deptCode}.`];
 
   const assigneeLabelParts = [];
   if (leadNames.length > 0) assigneeLabelParts.push(`Chủ trì: ${leadNames.join(", ")}`);
   if (coordNames.length > 0) assigneeLabelParts.push(`Phối hợp: ${coordNames.join(", ")}`);
-
-  const departmentAssignments = [
-    {
-      departmentName: primaryUnit || (leadNames[0] || "Đơn vị, cá nhân phụ trách"),
-      role: assigneeLabelParts.join("; ") || "Chủ trì tham mưu, thực hiện",
-      tasks,
-      deadline: formatDueDateVN(doc.dueDate),
-    },
-  ];
-
-  const closing = ensureClosingPunctuation(
-    `Yêu cầu ${
-      primaryUnit ? `Thủ trưởng ${primaryUnit}` : "các đơn vị"
-    } và cá nhân được phân công nghiêm túc triển khai thực hiện; báo cáo kết quả về ${agency} (qua ${deptCode}) đúng thời hạn quy định./.`
-  );
-
-  const noiNhan = [
-    "Như trên;",
-    `Lãnh đạo ${agency};`,
-    `Lưu: VT, ${deptCode}.`,
-  ];
 
   return {
     documentNumber: formatDocNumberPadded(settings.nextDocNumber || 1),
     symbolSuffix: `${agencyCode}-${deptCode}`,
     subject: normalizeCongVanSubject(doc.title),
     recipients,
-    preambleParagraphs: [preamble],
-    departmentAssignments,
-    closingParagraph: closing,
+    bodyParagraphs,
+    preambleParagraphs: bodyParagraphs.slice(0, 2),
+    departmentAssignments: [
+      {
+        departmentName: targetUnit,
+        role: assigneeLabelParts.join("; ") || "Chủ trì tham mưu, thực hiện",
+        tasks: rawNoteLines.length > 0 ? rawNoteLines : [actionDetail],
+        deadline: formatDueDateVN(doc.dueDate),
+      },
+    ],
+    closingParagraph: closingLine,
     noiNhan,
   };
 }
 
 // ==================== OOXML BUILDER (NGHỊ ĐỊNH 30/2020/NĐ-CP) ====================
+function buildMarkdownBoldRuns(text, { fontSizePt = 14, italic = false } = {}) {
+  const segments = String(text || "").split(/(\*\*[^*]+\*\*)/g);
+  const runs = [];
+  for (const seg of segments) {
+    if (!seg) continue;
+    if (seg.startsWith("**") && seg.endsWith("**") && seg.length > 4) {
+      runs.push(buildRunXml(seg.slice(2, -2), { fontSizePt, bold: true, italic }));
+    } else {
+      runs.push(buildRunXml(seg, { fontSizePt, bold: false, italic }));
+    }
+  }
+  return runs.length > 0 ? runs : [buildRunXml("", { fontSizePt, bold: false, italic })];
+}
+
 function buildRunXml(text, { fontSizePt = 14, bold = false, italic = false } = {}) {
   const sz = ptToHalfPt(fontSizePt);
   return (
@@ -621,51 +745,14 @@ function buildCongVanDocxBuffer(plan, cfg = DEFAULT_ND30_SETTINGS) {
   const spaceBefore = ptToTwips(settings.spaceBeforePt);
   const spaceAfter = ptToTwips(settings.spaceAfterPt);
 
-  // 3. Preamble
-  for (const pre of plan.preambleParagraphs || []) {
-    if (!String(pre || "").trim()) continue;
-    bodyBlocks.push(
-      buildParagraphXml({
-        alignment: "justify",
-        firstLineIndentTwips: indentTwips,
-        spaceBeforeTwips: spaceBefore,
-        spaceAfterTwips: spaceAfter,
-        lineMultiplier: settings.lineSpacingMultiplier,
-        runs: [buildRunXml(String(pre).trim(), { fontSizePt: settings.bodyFontSize })],
-      })
-    );
-  }
-
-  // 4. Department Assignments
-  const assignments = Array.isArray(plan.departmentAssignments)
-    ? plan.departmentAssignments
+  const bodyParas = Array.isArray(plan.bodyParagraphs)
+    ? plan.bodyParagraphs.map((p) => String(p || "").trim()).filter(Boolean)
     : [];
-  assignments.forEach((item, idx) => {
-    if (!item || !String(item.departmentName || "").trim()) return;
-    const roleSuffix = item.role ? ` (${String(item.role).trim()})` : "";
-    const deptHeader = `${idx + 1}. Giao ${String(item.departmentName).trim()}${roleSuffix}:`;
-    bodyBlocks.push(
-      buildParagraphXml({
-        alignment: "justify",
-        firstLineIndentTwips: indentTwips,
-        spaceBeforeTwips: spaceBefore,
-        spaceAfterTwips: spaceAfter,
-        lineMultiplier: settings.lineSpacingMultiplier,
-        runs: [
-          buildRunXml(deptHeader, {
-            fontSizePt: settings.bodyFontSize,
-            bold: true,
-          }),
-        ],
-      })
-    );
 
-    for (const t of item.tasks || []) {
-      const cleanTask = String(t || "")
-        .trim()
-        .replace(/^[-+•*]+\s*/, "");
-      if (!cleanTask) continue;
-      const ended = /[.;]$/.test(cleanTask) ? cleanTask : `${cleanTask}.`;
+  if (bodyParas.length > 0) {
+    bodyParas.forEach((paraText, idx) => {
+      const isLast = idx === bodyParas.length - 1;
+      const finalTxt = isLast ? ensureClosingPunctuation(paraText) : paraText;
       bodyBlocks.push(
         buildParagraphXml({
           alignment: "justify",
@@ -673,13 +760,34 @@ function buildCongVanDocxBuffer(plan, cfg = DEFAULT_ND30_SETTINGS) {
           spaceBeforeTwips: spaceBefore,
           spaceAfterTwips: spaceAfter,
           lineMultiplier: settings.lineSpacingMultiplier,
-          runs: [buildRunXml(`- ${ended}`, { fontSizePt: settings.bodyFontSize })],
+          runs: buildMarkdownBoldRuns(finalTxt, { fontSizePt: settings.bodyFontSize }),
+        })
+      );
+    });
+  } else {
+    // 3. Preamble (Legacy fallback)
+    for (const pre of plan.preambleParagraphs || []) {
+      if (!String(pre || "").trim()) continue;
+      bodyBlocks.push(
+        buildParagraphXml({
+          alignment: "justify",
+          firstLineIndentTwips: indentTwips,
+          spaceBeforeTwips: spaceBefore,
+          spaceAfterTwips: spaceAfter,
+          lineMultiplier: settings.lineSpacingMultiplier,
+          runs: [buildRunXml(String(pre).trim(), { fontSizePt: settings.bodyFontSize })],
         })
       );
     }
 
-    if (item.deadline && String(item.deadline).trim()) {
-      const dl = String(item.deadline).trim().replace(/[.;]+$/, "");
+    // 4. Department Assignments (Legacy fallback)
+    const assignments = Array.isArray(plan.departmentAssignments)
+      ? plan.departmentAssignments
+      : [];
+    assignments.forEach((item, idx) => {
+      if (!item || !String(item.departmentName || "").trim()) return;
+      const roleSuffix = item.role ? ` (${String(item.role).trim()})` : "";
+      const deptHeader = `${idx + 1}. Giao ${String(item.departmentName).trim()}${roleSuffix}:`;
       bodyBlocks.push(
         buildParagraphXml({
           alignment: "justify",
@@ -688,32 +796,69 @@ function buildCongVanDocxBuffer(plan, cfg = DEFAULT_ND30_SETTINGS) {
           spaceAfterTwips: spaceAfter,
           lineMultiplier: settings.lineSpacingMultiplier,
           runs: [
-            buildRunXml(`- Thời hạn hoàn thành/báo cáo: ${dl}.`, {
+            buildRunXml(deptHeader, {
               fontSizePt: settings.bodyFontSize,
-              italic: true,
+              bold: true,
+            }),
+          ],
+        })
+      );
+
+      for (const t of item.tasks || []) {
+        const cleanTask = String(t || "")
+          .trim()
+          .replace(/^[-+•*]+\s*/, "");
+        if (!cleanTask) continue;
+        const ended = /[.;]$/.test(cleanTask) ? cleanTask : `${cleanTask}.`;
+        bodyBlocks.push(
+          buildParagraphXml({
+            alignment: "justify",
+            firstLineIndentTwips: indentTwips,
+            spaceBeforeTwips: spaceBefore,
+            spaceAfterTwips: spaceAfter,
+            lineMultiplier: settings.lineSpacingMultiplier,
+            runs: [buildRunXml(`- ${ended}`, { fontSizePt: settings.bodyFontSize })],
+          })
+        );
+      }
+
+      if (item.deadline && String(item.deadline).trim()) {
+        const dl = String(item.deadline).trim().replace(/[.;]+$/, "");
+        bodyBlocks.push(
+          buildParagraphXml({
+            alignment: "justify",
+            firstLineIndentTwips: indentTwips,
+            spaceBeforeTwips: spaceBefore,
+            spaceAfterTwips: spaceAfter,
+            lineMultiplier: settings.lineSpacingMultiplier,
+            runs: [
+              buildRunXml(`- Thời hạn hoàn thành/báo cáo: ${dl}.`, {
+                fontSizePt: settings.bodyFontSize,
+                italic: true,
+              }),
+            ],
+          })
+        );
+      }
+    });
+
+    // 5. Closing Paragraph (bắt buộc kết thúc bằng ./.)
+    if (plan.closingParagraph) {
+      bodyBlocks.push(
+        buildParagraphXml({
+          alignment: "justify",
+          firstLineIndentTwips: indentTwips,
+          spaceBeforeTwips: spaceBefore,
+          spaceAfterTwips: spaceAfter,
+          lineMultiplier: settings.lineSpacingMultiplier,
+          runs: [
+            buildRunXml(ensureClosingPunctuation(plan.closingParagraph), {
+              fontSizePt: settings.bodyFontSize,
             }),
           ],
         })
       );
     }
-  });
-
-  // 5. Closing Paragraph (bắt buộc kết thúc bằng ./.)
-  if (plan.closingParagraph) {
-    bodyBlocks.push(
-      buildParagraphXml({
-        alignment: "justify",
-        firstLineIndentTwips: indentTwips,
-        spaceBeforeTwips: spaceBefore,
-        spaceAfterTwips: spaceAfter,
-        lineMultiplier: settings.lineSpacingMultiplier,
-        runs: [
-          buildRunXml(ensureClosingPunctuation(plan.closingParagraph), {
-            fontSizePt: settings.bodyFontSize,
-          }),
-        ],
-      })
-    );
   }
 
   // 6. Signature Table (50% / 50%)
@@ -894,33 +1039,41 @@ class Nd30DocxService {
     const assignees = Array.isArray(doc.assignees)
       ? doc.assignees.map((a) => `${a.displayName || a.userId} (${a.role === "coord" ? "Phối hợp" : "Chủ trì"})`).join(", ")
       : "";
+    const { isOffice, ubndFullName, ubndShortName, officePhrase } = deriveAgencyNames(settings);
+    const dueShort = formatDueDateShortVN(doc.dueDate);
+    const defaultNoiNhan = isOffice
+      ? ["Như trên;", `${ubndShortName};`, "Lãnh đạo VP;", "Lưu: VT."]
+      : ["Như trên;", `Lãnh đạo ${ubndShortName};`, `Lưu: VT, ${settings.departmentCode}.`];
 
     const prompt = `Bạn là Chuyên gia Văn thư - Hành chính nhà nước Việt Nam theo Nghị định số 30/2020/NĐ-CP.
-Hãy soạn thảo nội dung CÔNG VĂN GIAO VIỆC của "${settings.issuingAgency}" (Cơ quan chủ quản: "${settings.parentAgency}", Người ký: "${settings.signerTitle} ${settings.signerName}") dựa trên thông tin giao việc sau:
+Hãy soạn thảo nội dung CÔNG VĂN THÔNG BÁO Ý KIẾN CHỈ ĐẠO / GIAO VIỆC của "${settings.issuingAgency}" (Cơ quan chủ quản: "${settings.parentAgency}", Người ký: "${settings.signerTitle} ${settings.signerName}") dựa trên thông tin sau:
 - Số/Ký hiệu văn bản đến: ${doc.docNumber || "(Không có)"}
 - Cơ quan ban hành văn bản đến: ${doc.issuer || "(Không rõ)"}
-- Ngày văn bản đến: ${doc.receivedDate || "(Không rõ)"}
+- Ngày văn bản đến: ${doc.receivedDate ? formatReceivedDateVN(doc.receivedDate) : "(Không rõ)"}
 - Trích yếu nội dung: ${doc.title || ""}
 - Phòng/đơn vị phụ trách: ${doc.department || "(Chưa phân phòng ban)"}
 - Cá nhân thực hiện (Zalo): ${assignees || "(Chưa chọn)"}
-- Hạn hoàn thành: ${formatDueDateVN(doc.dueDate) || "(Không nêu cụ thể)"}
+- Hạn hoàn thành: ${dueShort || "(Không nêu cụ thể)"}
 - Nội dung chỉ đạo / yêu cầu: ${doc.notes || "(Triển khai thực hiện theo nội dung văn bản)"}
+
+⚠️ YÊU CẦU BẮT BUỘC VỀ VĂN PHONG & BỐ CỤC:
+Viết phần nội dung thành 4 đoạn văn xuôi mạch lạc, súc tích, KHÔNG đánh số "1.", "2." hay gạch đầu dòng cứng nhắc. Hãy tham khảo đúng văn phong mẫu sau:
+- Đoạn 1: "${ubndFullName} nhận được Công văn số 9315/SNV-TCBC ngày 20 tháng 11 năm 2026 của Sở Nội vụ về việc ..."
+- Đoạn 2: "Về vấn đề này, ${ubndShortName} có ý kiến như sau:"
+- Đoạn 3: "Giao [Đơn vị phụ trách] chủ trì, phối hợp với các cơ quan, đơn vị có liên quan nghiên cứu nội dung Công văn nêu trên. Tham mưu ${ubndShortName} [nội dung thực hiện / góp ý / báo cáo cụ thể] **${dueShort || "đúng thời hạn quy định"}.**" (bọc phần thời hạn trong **...** để in đậm trong Word).
+- Đoạn 4: "${isOffice ? `${officePhrase} thông báo ý kiến chỉ đạo của ${ubndShortName} đến [Đơn vị phụ trách] biết, phối hợp triển khai thực hiện./.` : `${ubndShortName} thông báo đến [Đơn vị phụ trách] biết, phối hợp triển khai thực hiện./.`}"
 
 Trả về duy nhất 1 JSON hợp lệ gồm:
 {
   "subject": "V/v ... (ngắn gọn, chuẩn Công văn NĐ 30/2020)",
-  "recipients": ["Tên phòng ban / đơn vị nhận"],
-  "preambleParagraphs": ["Đoạn mở đầu dẫn chiếu văn bản đến và nêu yêu cầu chung"],
-  "departmentAssignments": [
-    {
-      "departmentName": "Tên phòng ban / đơn vị",
-      "role": "Chủ trì tham mưu, thực hiện",
-      "tasks": ["Nhiệm vụ cụ thể 1...", "Nhiệm vụ cụ thể 2..."],
-      "deadline": "${formatDueDateVN(doc.dueDate)}"
-    }
+  "recipients": ["${doc.department || "Tên phòng ban / đơn vị nhận"}"],
+  "bodyParagraphs": [
+    "Đoạn 1...",
+    "Đoạn 2...",
+    "Đoạn 3 (có **trước ngày DD/MM/YYYY.** nếu có hạn)...",
+    "Đoạn 4 kết thúc bằng ./."
   ],
-  "closingParagraph": "Đoạn kết thúc bắt buộc kết thúc bằng ./.",
-  "noiNhan": ["Như trên;", "Lãnh đạo ${settings.issuingAgency};", "Lưu: VT, ${settings.departmentCode}."]
+  "noiNhan": ${JSON.stringify(defaultNoiNhan)}
 }`;
 
     try {
@@ -946,6 +1099,11 @@ Trả về duy nhất 1 JSON hợp lệ gồm:
       if (!parsed || typeof parsed !== "object") return null;
 
       const fallback = buildDeterministicAssignmentPlan(doc, settings);
+      const aiBody =
+        Array.isArray(parsed.bodyParagraphs) && parsed.bodyParagraphs.length > 0
+          ? parsed.bodyParagraphs.map((p) => String(p || "").trim()).filter(Boolean)
+          : null;
+
       return {
         documentNumber: fallback.documentNumber,
         symbolSuffix: fallback.symbolSuffix,
@@ -954,12 +1112,15 @@ Trả về duy nhất 1 JSON hợp lệ gồm:
           Array.isArray(parsed.recipients) && parsed.recipients.length > 0
             ? parsed.recipients
             : fallback.recipients,
+        bodyParagraphs: aiBody || fallback.bodyParagraphs,
         preambleParagraphs:
-          Array.isArray(parsed.preambleParagraphs) && parsed.preambleParagraphs.length > 0
+          !aiBody && Array.isArray(parsed.preambleParagraphs) && parsed.preambleParagraphs.length > 0
             ? parsed.preambleParagraphs
             : fallback.preambleParagraphs,
         departmentAssignments:
-          Array.isArray(parsed.departmentAssignments) && parsed.departmentAssignments.length > 0
+          !aiBody &&
+          Array.isArray(parsed.departmentAssignments) &&
+          parsed.departmentAssignments.length > 0
             ? parsed.departmentAssignments
             : fallback.departmentAssignments,
         closingParagraph: ensureClosingPunctuation(

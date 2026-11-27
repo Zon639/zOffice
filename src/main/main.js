@@ -33,7 +33,9 @@ let updateService = null;
 let nd30DocxService = null;
 let updateSchedulerStarted = false;
 
-const DATA_DIR = path.join(app.getAppPath(), "data");
+const DATA_DIR = app.isPackaged
+  ? path.join(app.getPath("userData"), "data")
+  : path.join(app.getAppPath(), "data");
 const ATTACHMENTS_DIR = path.join(DATA_DIR, "attachments");
 const WEB_DOWNLOADS_DIR = path.join(DATA_DIR, "web_downloads");
 const AI_CHAT_UPLOADS_DIR = path.join(DATA_DIR, "ai_chat_uploads");
@@ -263,9 +265,21 @@ function sendToRenderer(channel, payload) {
   }
 }
 
+function resolveBundledResource(...segments) {
+  const candidates = [];
+  if (app.isPackaged && process.resourcesPath) {
+    candidates.push(path.join(process.resourcesPath, ...segments));
+  }
+  candidates.push(path.join(app.getAppPath(), ...segments));
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+  return candidates[0];
+}
+
 function createWindow() {
-  const icoPath = path.join(app.getAppPath(), "z.ico");
-  const pngPath = path.join(app.getAppPath(), "z.png");
+  const icoPath = resolveBundledResource("z.ico");
+  const pngPath = resolveBundledResource("z.png");
   const windowIconPath =
     process.platform === "win32" && fs.existsSync(icoPath)
       ? icoPath
@@ -1190,6 +1204,30 @@ app.whenReady().then(() => {
         ...(imported || {}),
       },
     };
+  });
+
+  ipcMain.handle("nd30:install-addin", async () => {
+    const { execFile } = require("node:child_process");
+    const psScript = app.isPackaged
+      ? path.join(process.resourcesPath || "", "addin", "Install-NghiDinh30-AddIn.ps1")
+      : path.join(app.getAppPath(), "build", "addin", "Install-NghiDinh30-AddIn.ps1");
+    if (!fs.existsSync(psScript)) {
+      throw new Error(`Không tìm thấy bộ cài Add-in Nghị định 30/2020 tại: ${psScript}`);
+    }
+    const output = await new Promise((resolve, reject) => {
+      execFile(
+        "powershell.exe",
+        ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", psScript],
+        { timeout: 25000, windowsHide: true },
+        (err, stdout, stderr) => {
+          if (err) {
+            return reject(new Error(String(stderr || stdout || err.message).trim()));
+          }
+          resolve(String(stdout || "").trim());
+        }
+      );
+    });
+    return { success: true, output };
   });
 
   ipcMain.handle("docs:delete", async (_event, docId) => {

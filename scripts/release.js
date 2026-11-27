@@ -53,6 +53,7 @@ async function buildCleanZip(version) {
     "z.png",
     "src",
     "apps-script",
+    "build",
     "scripts",
     "test",
   ];
@@ -72,6 +73,20 @@ async function buildCleanZip(version) {
   ]);
   await fsp.rm(stageDir, { recursive: true, force: true });
   return zipPath;
+}
+
+async function buildWindowsInstaller(version) {
+  const builderCmd = path.join(ROOT_DIR, "node_modules", ".bin", "electron-builder.cmd");
+  const expectedExe = path.join(ROOT_DIR, "dist", `zOffice-Setup-${version}.exe`);
+  if (!fs.existsSync(builderCmd)) {
+    console.warn("electron-builder not found; skipping .exe installer build.");
+    return null;
+  }
+  run("cmd.exe", ["/c", builderCmd, "--win", "nsis"]);
+  if (!fs.existsSync(expectedExe)) {
+    throw new Error(`Không tìm thấy tệp cài đặt sau khi build: ${expectedExe}`);
+  }
+  return expectedExe;
 }
 
 async function main() {
@@ -97,8 +112,13 @@ async function main() {
   const tag = `v${nextVersion}`;
   const repo = typeof pkg.repository === "string" ? pkg.repository : "Zon639/zOffice";
 
-  // 1. Run tests before releasing
-  run(process.execPath, ["--test", "test/aiAndUpdate.test.js", "test/googleSheetService.test.js"]);
+  // 1. Run all unit tests before releasing
+  run(process.execPath, [
+    "--test",
+    "test/aiAndUpdate.test.js",
+    "test/googleSheetService.test.js",
+    "test/nd30DocxService.test.js",
+  ]);
 
   // 2. Commit & push via git if available
   try {
@@ -113,21 +133,27 @@ async function main() {
     console.warn("Git push note:", err.message);
   }
 
-  // 3. Build clean release zip (excludes data/, node_modules/, .agents/)
+  // 3. Build clean release zip AND Windows .exe installer
   const zipPath = await buildCleanZip(nextVersion);
   console.log(`Built release package: ${zipPath}`);
+  const exePath = await buildWindowsInstaller(nextVersion);
+  if (exePath) {
+    console.log(`Built Windows installer: ${exePath}`);
+  }
 
-  // 4. Create or update GitHub Release
+  // 4. Create GitHub Release with both .exe (for installed users) and .zip (for source users)
   const releaseNotes =
     notes ||
-    `Phát hành zOffice ${tag}\n\n- Đồng bộ mã nguồn & cập nhật tự động qua GitHub Releases.\n- An toàn dữ liệu cục bộ (không ghi đè thư mục data/).`;
+    `Phát hành zOffice ${tag}\n\n- Đồng bộ mã nguồn & cập nhật tự động qua GitHub Releases.\n- Đính kèm bộ cài zOffice-Setup-${nextVersion}.exe (kèm đầy đủ thư viện & Add-in Word NĐ 30/2020) và gói cập nhật mã nguồn .zip.\n- An toàn dữ liệu cục bộ (không ghi đè thư mục data/).`;
+
+  const assets = [exePath, zipPath].filter(Boolean);
 
   try {
     run(GH_EXE, [
       "release",
       "create",
       tag,
-      zipPath,
+      ...assets,
       "--repo",
       repo,
       "--title",
